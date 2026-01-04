@@ -145,6 +145,8 @@ jobs:
             * Windows / macOS supported
           files: dist/**
 
+      - uses: actions/checkout@v4
+
       - name: Save built tag
         run: |
           echo "${{ needs.check.outputs.tag }}" > last_built_tag
