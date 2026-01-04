@@ -65,7 +65,12 @@ jobs:
           path: bear-prebuilt/bear
 
       - name: Install Rust
+        uses: dtolnay/rust-toolchain@nightly
+        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu.2.17') || startsWith(matrix.target, 'aarch64-unknown-linux-gnu.2.17') || matrix.target == 'aarch64-pc-windows-gnu'
+
+      - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        if: matrix.target != 'aarch64-pc-windows-gnu' && !startsWith(matrix.target, 'x86_64-unknown-linux-gnu.2.17') && !startsWith(matrix.target, 'aarch64-unknown-linux-gnu.2.17')
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2
@@ -97,15 +102,12 @@ jobs:
           bash scripts/package.sh \
             "${{ needs.check.outputs.tag }}" \
             "${{ matrix.target }}"
-          echo "=== dist contents ==="
-          ls -la dist/
-          echo "=== bear binary ==="
-          find bear/target -name "bear" -type f 2>/dev/null | head -5
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: dist/*
+          path: bear-prebuilt/dist/*
 
   release:
     needs: [check, build]
