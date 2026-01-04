@@ -5,9 +5,6 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 env:
   BEAR_REPO: rizsotto/Bear
 
@@ -48,6 +45,12 @@ jobs:
           - armv7-unknown-linux-gnueabihf.2.17
           - i686-unknown-linux-gnu.2.17
 
+          # Linux (musl)
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - i686-unknown-linux-musl
+
           # Windows (MSVC)
           - x86_64-pc-windows-msvc
           - aarch64-pc-windows-msvc
@@ -57,12 +60,17 @@ jobs:
           - aarch64-apple-darwin
 
     steps:
+      - name: Checkout Bear prebuilt repo
+        uses: actions/checkout@v4
+        with:
+          path: bear-prebuilt
+
       - name: Checkout Bear
         uses: actions/checkout@v4
         with:
           repository: ${{ env.BEAR_REPO }}
           ref: ${{ needs.check.outputs.tag }}
-          path: bear
+          path: bear-prebuilt/bear
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -91,37 +99,31 @@ jobs:
 
       - name: Build Bear (zigbuild)
         if: "!contains(matrix.target, 'windows')"
+        working-directory: bear-prebuilt/bear
         run: |
-          cd bear
           cargo zigbuild --release --target ${{ matrix.target }}
 
       - name: Build Bear (MSVC)
         if: contains(matrix.target, 'windows')
+        working-directory: bear-prebuilt/bear
         run: |
-          cd bear
           cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Linux/macOS)
         if: "!contains(matrix.target, 'windows')"
-        run: |
-          bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        working-directory: bear-prebuilt
+        run: bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Package (Windows)
         if: contains(matrix.target, 'windows')
-        run: |
-          pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
-
-      - name: Check working directory
-        run: |
-          pwd
-          ls -la
-          ls -la scripts/
+        working-directory: bear-prebuilt
+        run: pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: dist/*
+          path: bear-prebuilt/dist/*
 
   release:
     needs: [check, build]
