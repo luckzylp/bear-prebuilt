@@ -83,19 +83,18 @@ jobs:
         if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt/bear
         run: |
-          cargo zigbuild \
-            --release \
-            --target ${{ matrix.target }} \
-            -- \
-            -Dglibc-version="${{ contains(matrix.target, '.2.17') && '2.17' || '2.31' }}"
+          if [[ "${{ matrix.target }}" == *".2.17"* ]]; then
+            export ZIG_GLIBC_VERSION="2.17"
+          else
+            export ZIG_GLIBC_VERSION="2.31"
+          fi
+          cargo zigbuild --release --target ${{ matrix.target }}
 
       - name: Build Bear (MSVC)
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt/bear
         run: |
-          cargo build \
-            --release \
-            --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Package
         working-directory: bear-prebuilt
