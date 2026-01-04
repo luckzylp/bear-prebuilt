@@ -1,0 +1,121 @@
+name: Bear Auto Prebuilt (cargo + zigbuild)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+env:
+  BEAR_REPO: rizsotto/Bear
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      changed: ${{ steps.check.outputs.changed }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check latest Bear release
+        id: check
+        run: |
+          bash scripts/check_release.sh
+
+  build:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # Linux (glibc high)
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+          - i686-unknown-linux-gnu
+
+          # Linux (glibc 2.17)
+          - x86_64-unknown-linux-gnu.2.17
+          - aarch64-unknown-linux-gnu.2.17
+
+          # Windows
+          - x86_64-pc-windows-gnu
+          - aarch64-pc-windows-gnu
+
+          # macOS
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+
+    steps:
+      - name: Checkout Bear
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BEAR_REPO }}
+          ref: ${{ needs.check.outputs.tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: latest
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build Bear
+        run: |
+          cargo zigbuild \
+            --release \
+            --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          bash scripts/package.sh \
+            "${{ needs.check.outputs.tag }}" \
+            "${{ matrix.target }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  release:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: bear-${{ needs.check.outputs.tag }}
+          name: Bear ${{ needs.check.outputs.tag }} (Prebuilt)
+          body: |
+            Automated prebuilt binaries for Bear ${{ needs.check.outputs.tag }}
+
+            * Built with cargo + zigbuild
+            * Linux: glibc high & glibc 2.17
+            * x86 / x64 multilib
+            * Windows / macOS supported
+          files: dist/**
+
+      - name: Save built tag
+        run: |
+          echo "${{ needs.check.outputs.tag }}" > last_built_tag
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add last_built_tag
+          git commit -m "chore: built Bear ${{ needs.check.outputs.tag }}"
+          git push
