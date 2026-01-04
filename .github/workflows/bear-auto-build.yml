@@ -103,13 +103,19 @@ jobs:
 
       - name: Package (Linux/macOS)
         if: "!contains(matrix.target, 'windows')"
-        working-directory: .
-        run: bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: |
+          bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Package (Windows)
         if: contains(matrix.target, 'windows')
-        working-directory: .
-        run: pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: |
+          pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+
+      - name: Check working directory
+        run: |
+          pwd
+          ls -la
+          ls -la scripts/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
