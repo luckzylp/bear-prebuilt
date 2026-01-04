@@ -52,12 +52,17 @@ jobs:
           - aarch64-apple-darwin
 
     steps:
+      - name: Checkout Bear prebuilt repo
+        uses: actions/checkout@v4
+        with:
+          path: bear-prebuilt
+
       - name: Checkout Bear
         uses: actions/checkout@v4
         with:
           repository: ${{ env.BEAR_REPO }}
           ref: ${{ needs.check.outputs.tag }}
-          path: bear
+          path: bear-prebuilt/bear
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -70,21 +75,29 @@ jobs:
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild
 
+      - name: Install mingw toolchain
+        if: contains(matrix.target, 'windows')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+
       - name: Add Rust target
         run: rustup target add ${{ matrix.target }}
 
       - name: Build Bear
-        working-directory: bear
+        working-directory: bear-prebuilt/bear
         run: |
           cargo zigbuild \
             --release \
             --target ${{ matrix.target }}
 
       - name: Package
+        working-directory: bear-prebuilt
         run: |
           bash scripts/package.sh \
             "${{ needs.check.outputs.tag }}" \
             "${{ matrix.target }}"
+          ls -la dist/
 
       - uses: actions/upload-artifact@v4
         with:
