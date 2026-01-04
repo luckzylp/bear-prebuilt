@@ -27,6 +27,11 @@ if [[ -f "${RELEASE_DIR}/wrapper" ]]; then
   cp "${RELEASE_DIR}/wrapper" "${OUT}/libexec/bear/"
 fi
 
+# Install libexec.so if exists
+if [[ -f "${RELEASE_DIR}/libexec.so" ]]; then
+  cp "${RELEASE_DIR}/libexec.so" "${OUT}/libexec/bear/"
+fi
+
 # Install man page if exists
 if [[ -f "${BEAR_DIR}/man/bear.1" ]]; then
   cp "${BEAR_DIR}/man/bear.1" "${OUT}/man/man1/"

@@ -27,6 +27,13 @@ if (Test-Path $WRAPPER)
     Copy-Item $WRAPPER (Join-Path $OUT "libexec\bear\wrapper.exe")
 }
 
+# Install libexec if exists
+$LIBEXEC = Join-Path $RELEASE_DIR "exec.dll"
+if (Test-Path $LIBEXEC)
+{
+    Copy-Item $LIBEXEC (Join-Path $OUT "libexec\bear\exec.dll")
+}
+
 # Install man page if exists
 $MANPAGE = Join-Path $BEAR_DIR "man\bear.1"
 if (Test-Path $MANPAGE)
