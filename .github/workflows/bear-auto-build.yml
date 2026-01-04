@@ -42,6 +42,14 @@ jobs:
           # Linux (glibc 2.17)
           - x86_64-unknown-linux-gnu.2.17
           - aarch64-unknown-linux-gnu.2.17
+          - armv7-unknown-linux-gnueabihf.2.17
+          - i686-unknown-linux-gnu.2.17
+
+          # Linux (musl)
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - i686-unknown-linux-musl
 
           # Windows (MSVC)
           - x86_64-pc-windows-msvc
@@ -77,17 +85,16 @@ jobs:
         run: cargo install cargo-zigbuild
 
       - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
+        run: |
+          TARGET="${{ matrix.target }}"
+          # Remove .2.17 suffix for glibc 2.17 targets
+          TARGET="${TARGET%.2.17}"
+          rustup target add "$TARGET"
 
       - name: Build Bear (zigbuild)
         if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt/bear
         run: |
-          if [[ "${{ matrix.target }}" == *".2.17"* ]]; then
-            export ZIG_GLIBC_VERSION="2.17"
-          else
-            export ZIG_GLIBC_VERSION="2.31"
-          fi
           cargo zigbuild --release --target ${{ matrix.target }}
 
       - name: Build Bear (MSVC)
@@ -96,12 +103,15 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Package (Linux/macOS)
+        if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt
-        run: |
-          bash scripts/package.sh \
-            "${{ needs.check.outputs.tag }}" \
-            "${{ matrix.target }}"
+        run: bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+
+      - name: Package (Windows)
+        if: contains(matrix.target, 'windows')
+        working-directory: bear-prebuilt
+        run: pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
