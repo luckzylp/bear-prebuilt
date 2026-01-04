@@ -74,6 +74,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ contains(matrix.target, 'windows') && 'x86_64-pc-windows-msvc,aarch64-pc-windows-msvc' || '' }}
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2
