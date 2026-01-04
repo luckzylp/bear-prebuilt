@@ -61,10 +61,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Zig
-        uses: https://codeberg.org/mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
+      - name: Install Zig 0.15.2
+        run: |
+          curl -L https://ziglang.org/download/0.15.2/zig-linux-x86_64-0.15.2.tar.xz -o zig.tar.xz
+          tar -xf zig.tar.xz
+          echo "$PWD/zig-linux-x86_64-0.15.2" >> $GITHUB_PATH
 
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild
