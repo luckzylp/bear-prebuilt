@@ -1,4 +1,4 @@
-name: Bear Auto Prebuilt (cargo + zigbuild)
+name: Bear Auto Prebuilt
 
 on:
   schedule:
@@ -20,6 +20,7 @@ jobs:
 
       - name: Check latest Bear release
         id: check
+        shell: bash
         run: |
           bash scripts/check_release.sh
 
