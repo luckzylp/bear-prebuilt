@@ -159,3 +159,4 @@ jobs:
           git add last_built_tag
           git commit -m "chore: built Bear ${{ needs.check.outputs.tag }}"
           git push
+        working-directory: bear-prebuilt

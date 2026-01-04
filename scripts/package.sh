@@ -12,14 +12,27 @@ OUT="${ROOT}/dist"
 
 # Remove .2.17 suffix for glibc 2.17 targets when finding the binary
 BUILD_TARGET="${TARGET%.2.17}"
-BIN="${BEAR_DIR}/target/${BUILD_TARGET}/release/bear"
+RELEASE_DIR="${BEAR_DIR}/target/${BUILD_TARGET}/release"
+ls "${RELEASE_DIR}" -al
 
-if [[ "$TARGET" == *windows* ]]; then
-  BIN="${BIN}.exe"
+mkdir -p "${OUT}/bin"
+mkdir -p "${OUT}/libexec/bear"
+mkdir -p "${OUT}/man/man1"
+
+# Install bear binary
+cp "${RELEASE_DIR}/bear" "${OUT}/bin/"
+
+# Install wrapper if exists
+if [[ -f "${RELEASE_DIR}/wrapper" ]]; then
+  cp "${RELEASE_DIR}/wrapper" "${OUT}/libexec/bear/"
 fi
 
-mkdir -p "$OUT"
+# Install man page if exists
+if [[ -f "${BEAR_DIR}/man/bear.1" ]]; then
+  cp "${BEAR_DIR}/man/bear.1" "${OUT}/man/man1/"
+fi
 
 ARCHIVE="bear-${TAG}-${TARGET}.tar.gz"
 
-tar -czf "${OUT}/${ARCHIVE}" -C "$(dirname "$BIN")" "$(basename "$BIN")"
+tar -czf "${OUT}/${ARCHIVE}" -C "${OUT}" "bin" "libexec" "man"
+rm -rf "${OUT}/bin" "${OUT}/libexec" "${OUT}/man"
