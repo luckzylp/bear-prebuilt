@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
+set -u
+set -o pipefail
 
 TAG="$1"
 TARGET="$2"
 
-BIN="target/${TARGET}/release/bear"
-OUT="dist"
+ROOT="$(pwd)"
+BEAR_DIR="${ROOT}/bear"
+OUT="${ROOT}/dist"
 
-mkdir -p "$OUT"
+BIN="${BEAR_DIR}/target/${TARGET}/release/bear"
 
 if [[ "$TARGET" == *windows* ]]; then
   BIN="${BIN}.exe"
 fi
+
+mkdir -p "$OUT"
 
 ARCHIVE="bear-${TAG}-${TARGET}.tar.gz"
 
