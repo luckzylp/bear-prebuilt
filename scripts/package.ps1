@@ -8,7 +8,9 @@ $ROOT = (Get-Location)
 $BEAR_DIR = Join-Path $ROOT "bear"
 $OUT = Join-Path $ROOT "dist"
 
-$BIN = Join-Path $BEAR_DIR "target\$TARGET\release\bear.exe"
+# Remove .2.17 suffix for glibc 2.17 targets when finding the binary
+$BUILD_TARGET = $TARGET -replace '\.2\.17$', ''
+$BIN = Join-Path $BEAR_DIR "target\$BUILD_TARGET\release\bear.exe"
 
 New-Item -ItemType Directory -Force -Path $OUT | Out-Null
 

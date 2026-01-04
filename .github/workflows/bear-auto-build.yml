@@ -84,12 +84,16 @@ jobs:
         if: "!contains(matrix.target, 'windows')"
         run: cargo install cargo-zigbuild
 
-      - name: Add Rust target
+      - name: Add Rust target (Linux/macOS)
+        if: "!contains(matrix.target, 'windows')"
         run: |
           TARGET="${{ matrix.target }}"
-          # Remove .2.17 suffix for glibc 2.17 targets
           TARGET="${TARGET%.2.17}"
           rustup target add "$TARGET"
+
+      - name: Add Rust target (Windows)
+        if: contains(matrix.target, 'windows')
+        run: pwsh -Command "$TARGET = '${{ matrix.target }}'.Replace('.2.17', ''); rustup target add $TARGET"
 
       - name: Build Bear (zigbuild)
         if: "!contains(matrix.target, 'windows')"

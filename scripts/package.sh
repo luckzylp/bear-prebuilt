@@ -10,7 +10,9 @@ ROOT="$(pwd)"
 BEAR_DIR="${ROOT}/bear"
 OUT="${ROOT}/dist"
 
-BIN="${BEAR_DIR}/target/${TARGET}/release/bear"
+# Remove .2.17 suffix for glibc 2.17 targets when finding the binary
+BUILD_TARGET="${TARGET%.2.17}"
+BIN="${BEAR_DIR}/target/${BUILD_TARGET}/release/bear"
 
 if [[ "$TARGET" == *windows* ]]; then
   BIN="${BIN}.exe"
