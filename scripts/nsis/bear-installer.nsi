@@ -99,11 +99,16 @@ Section "Bear Core Files" SecCore
     IfFileExists "..\..\Bear\README.md" 0 +2
     File "..\..\Bear\README.md"
 
-    IfFileExists "..\..\Bear\LICENSE.txt" 0 +3
-    File "..\..\Bear\LICENSE.txt"
-    Goto +2
-    IfFileExists "..\..\Bear\LICENSE" 0 +2
+    ; Install license file (prefer LICENSE.txt, fall back to LICENSE)
+    StrCpy $R0 "0"
+    IfFileExists "..\..\Bear\LICENSE.txt" 0 SkipLicenseTxt
+    File /oname=LICENSE.txt "..\..\Bear\LICENSE.txt"
+    StrCpy $R0 "1"
+    SkipLicenseTxt:
+    IfFileExists "..\..\Bear\LICENSE" 0 SkipLicense
+    StrCmp $R0 "1" SkipLicense 0
     File /oname=LICENSE.txt "..\..\Bear\LICENSE"
+    SkipLicense:
 
     ; Write installation directory to registry
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
