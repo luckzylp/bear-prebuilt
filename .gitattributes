@@ -1,0 +1,14 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts must use LF (Unix line endings)
+*.sh text eol=lf
+
+# Batch/PowerShell scripts use CRLF (Windows line endings)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# GitHub Actions workflows use LF
+.github/**/*.yml text eol=lf
+.github/**/*.yaml text eol=lf
