@@ -10,24 +10,26 @@ env:
   BEAR_REPO: rizsotto/Bear
 
 jobs:
-  check:
+  get-version:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.check.outputs.tag }}
-      changed: ${{ steps.check.outputs.changed }}
+      tag: ${{ steps.get-tag.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check latest Bear release
-        id: check
+      - name: Get latest Bear release tag
+        id: get-tag
         shell: bash
         run: |
-          bash scripts/check_release.sh
+          LATEST_TAG=$(curl -fsSL \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/rizsotto/Bear/releases/latest \
+            | jq -r .tag_name)
+          echo "tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest Bear version: $LATEST_TAG"
 
   build:
-    needs: check
-    if: needs.check.outputs.changed == 'true'
+    needs: get-version
     runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || 'ubuntu-latest' }}
 
     strategy:
@@ -64,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.BEAR_REPO }}
-          ref: ${{ needs.check.outputs.tag }}
+          ref: ${{ needs.get-version.outputs.tag }}
           path: bear-prebuilt/Bear
 
       - name: Install Rust
@@ -130,28 +132,28 @@ jobs:
       - name: Create Windows Installer
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt
-        run: pwsh scripts/create-windows-installer.ps1 -Version "${{ needs.check.outputs.tag }}" -TargetTriple "${{ matrix.target }}"
+        run: pwsh scripts/create-windows-installer.ps1 -Version "${{ needs.get-version.outputs.tag }}" -TargetTriple "${{ matrix.target }}"
 
       - name: Create Debian Package
         if: "!contains(matrix.target, 'windows') && !contains(matrix.target, 'darwin')"
         working-directory: bear-prebuilt
-        run: bash scripts/create-deb-package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: bash scripts/create-deb-package.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Create macOS Package
         if: contains(matrix.target, 'darwin')
         working-directory: bear-prebuilt
-        run: bash scripts/create-macos-dmg.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: bash scripts/create-macos-dmg.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Package (Linux/macOS) - Legacy
         if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt
-        run: bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: bash scripts/package.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
         continue-on-error: true
 
       - name: Package (Windows) - Legacy
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt
-        run: pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        run: pwsh scripts/package.ps1 "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
         continue-on-error: true
 
       - name: Upload artifact
@@ -161,7 +163,7 @@ jobs:
           path: bear-prebuilt/dist/*
 
   release:
-    needs: [check, build]
+    needs: [get-version, build]
     runs-on: ubuntu-latest
 
     steps:
@@ -172,10 +174,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: bear-${{ needs.check.outputs.tag }}
-          name: Bear ${{ needs.check.outputs.tag }} (Prebuilt)
+          tag_name: bear-${{ needs.get-version.outputs.tag }}
+          name: Bear ${{ needs.get-version.outputs.tag }} (Prebuilt)
           body: |
-            Automated prebuilt binaries and installers for Bear ${{ needs.check.outputs.tag }}
+            Automated prebuilt binaries and installers for Bear ${{ needs.get-version.outputs.tag }}
 
             ## Installation Paths
             * **Windows**: `C:\Program Files\Bear\` (via .exe installer)
@@ -195,9 +197,9 @@ jobs:
 
       - name: Save built tag
         run: |
-          echo "${{ needs.check.outputs.tag }}" > last_built_tag
+          echo "${{ needs.get-version.outputs.tag }}" > last_built_tag
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add last_built_tag
-          git commit -m "chore: built Bear ${{ needs.check.outputs.tag }}"
+          git commit -m "chore: built Bear ${{ needs.get-version.outputs.tag }}"
           git push
