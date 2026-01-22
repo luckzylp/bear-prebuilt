@@ -22,8 +22,7 @@ echo "✓ Backed up original build.rs"
 # Apply Windows-specific patch
 # Change: const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
 # To:     const DEFAULT_WRAPPER_PATH: &str = "C:/Program Files/Bear";
-sed -i.tmp 's|const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";|const DEFAULT_WRAPPER_PATH: &str = "C:/Program Files/Bear";|g' "${BUILD_RS_PATH}"
-rm -f "${BUILD_RS_PATH}.tmp"
+sed -i 's|/usr/local/libexec/bear|C:/Program Files/Bear|g' "${BUILD_RS_PATH}"
 
 echo "✓ Applied Windows patches"
 

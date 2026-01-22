@@ -26,11 +26,9 @@ echo "✓ Backed up original build.rs"
 # Change 2: const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
 # To:       const DEFAULT_PRELOAD_PATH: &str = "/usr/lib/libexec/bear/$LIB";
 
-sed -i.tmp \
-  -e 's|const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";|const DEFAULT_WRAPPER_PATH: &str = "/usr/lib/libexec/bear";|g' \
-  -e 's|const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/\$LIB";|const DEFAULT_PRELOAD_PATH: &str = "/usr/lib/libexec/bear/\$LIB";|g' \
+sed -i \
+  -e 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' \
   "${BUILD_RS_PATH}"
-rm -f "${BUILD_RS_PATH}.tmp"
 
 echo "✓ Applied Linux patches"
 

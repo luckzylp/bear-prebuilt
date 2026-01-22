@@ -2,3 +2,5 @@ dist/
 target/
 zig-cache/
 .zig-cache/
+.cache
+.claude
