@@ -43,7 +43,7 @@ echo "Multilib Support: $MULTILIB_SUPPORT"
 
 # Determine directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BEAR_DIR="$PROJECT_ROOT/Bear"
 DEBIAN_DIR="$SCRIPT_DIR/debian"
 BUILD_DIR="$PROJECT_ROOT/build/deb"

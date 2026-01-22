@@ -26,9 +26,7 @@ echo "✓ Backed up original build.rs"
 # Change 2: const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
 # To:       const DEFAULT_PRELOAD_PATH: &str = "/usr/lib/libexec/bear/$LIB";
 
-sed -i \
-  -e 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' \
-  "${BUILD_RS_PATH}"
+sed -i 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' "${BUILD_RS_PATH}"
 
 echo "✓ Applied macOS patches"
 
