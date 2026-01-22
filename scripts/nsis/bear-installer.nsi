@@ -72,6 +72,10 @@ Function DirectoryPre
     EnableWindow $1 0  ; Disable the directory text field
 FunctionEnd
 
+!ifndef TARGET_DIR
+  !define TARGET_DIR "target\release"
+!endif
+
 ;--------------------------------
 ; Installer Sections
 
@@ -81,19 +85,19 @@ Section "Bear Core Files" SecCore
     SetOutPath "$INSTDIR"
 
     ; Install executables
-    File /oname=bear.exe "..\..\Bear\target\release\bear.exe"
+    File /oname=bear.exe "..\..\Bear\${TARGET_DIR}\bear.exe"
 
     ; Install wrapper if it exists
-    IfFileExists "..\..\Bear\target\release\wrapper.exe" 0 +2
-    File /oname=wrapper.exe "..\..\Bear\target\release\wrapper.exe"
+    IfFileExists "..\..\Bear\${TARGET_DIR}\wrapper.exe" 0 +2
+    File /oname=wrapper.exe "..\..\Bear\${TARGET_DIR}\wrapper.exe"
 
     ; Install intercept if it exists
-    IfFileExists "..\..\Bear\target\release\intercept.exe" 0 +2
-    File /oname=intercept.exe "..\..\Bear\target\release\intercept.exe"
+    IfFileExists "..\..\Bear\${TARGET_DIR}\intercept.exe" 0 +2
+    File /oname=intercept.exe "..\..\Bear\${TARGET_DIR}\intercept.exe"
 
     ; Install library files if they exist
-    IfFileExists "..\..\Bear\target\release\*.dll" 0 +2
-    File "..\..\Bear\target\release\*.dll"
+    IfFileExists "..\..\Bear\${TARGET_DIR}\*.dll" 0 +2
+    File "..\..\Bear\${TARGET_DIR}\*.dll"
 
     ; Install documentation
     IfFileExists "..\..\Bear\README.md" 0 +2
