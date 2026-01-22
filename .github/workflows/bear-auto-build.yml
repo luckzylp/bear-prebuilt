@@ -2,7 +2,7 @@ name: Bear Auto Prebuilt
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -67,7 +67,7 @@ jobs:
         with:
           repository: ${{ env.BEAR_REPO }}
           ref: ${{ needs.check.outputs.tag }}
-          path: bear-prebuilt/bear
+          path: bear-prebuilt/Bear
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -94,27 +94,67 @@ jobs:
         if: contains(matrix.target, 'windows')
         run: pwsh -Command "'${{ matrix.target }}'.Replace('.2.17', '') | ForEach-Object { rustup target add $_ }"
 
+      - name: Apply platform-specific patches
+        working-directory: bear-prebuilt
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            echo "Applying Windows patches..."
+            bash scripts/patch-build-rs-windows.sh
+          elif [[ "${{ matrix.target }}" == *"darwin"* ]]; then
+            echo "Applying macOS patches..."
+            bash scripts/patch-build-rs-macos.sh
+          else
+            echo "Applying Linux patches..."
+            bash scripts/patch-build-rs-linux.sh
+          fi
+
       - name: Build Bear (zigbuild)
         if: "!contains(matrix.target, 'windows')"
-        working-directory: bear-prebuilt/bear
+        working-directory: bear-prebuilt/Bear
         run: |
           cargo zigbuild --release --target ${{ matrix.target }}
 
       - name: Build Bear (MSVC)
         if: contains(matrix.target, 'windows')
-        working-directory: bear-prebuilt/bear
+        working-directory: bear-prebuilt/Bear
         run: |
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Package (Linux/macOS)
+      - name: Install NSIS (Windows)
+        if: contains(matrix.target, 'windows')
+        run: choco install nsis -y
+
+      - name: Install dpkg tools (Linux)
+        if: "!contains(matrix.target, 'windows') && !contains(matrix.target, 'darwin')"
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev fakeroot
+
+      - name: Create Windows Installer
+        if: contains(matrix.target, 'windows')
+        working-directory: bear-prebuilt
+        run: pwsh scripts/create-windows-installer.ps1 -Version "${{ needs.check.outputs.tag }}" -TargetTriple "${{ matrix.target }}"
+
+      - name: Create Debian Package
+        if: "!contains(matrix.target, 'windows') && !contains(matrix.target, 'darwin')"
+        working-directory: bear-prebuilt
+        run: bash scripts/create-deb-package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+
+      - name: Create macOS Package
+        if: contains(matrix.target, 'darwin')
+        working-directory: bear-prebuilt
+        run: bash scripts/create-macos-dmg.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+
+      - name: Package (Linux/macOS) - Legacy
         if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt
         run: bash scripts/package.sh "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        continue-on-error: true
 
-      - name: Package (Windows)
+      - name: Package (Windows) - Legacy
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt
         run: pwsh scripts/package.ps1 "${{ needs.check.outputs.tag }}" "${{ matrix.target }}"
+        continue-on-error: true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -137,12 +177,20 @@ jobs:
           tag_name: bear-${{ needs.check.outputs.tag }}
           name: Bear ${{ needs.check.outputs.tag }} (Prebuilt)
           body: |
-            Automated prebuilt binaries for Bear ${{ needs.check.outputs.tag }}
+            Automated prebuilt binaries and installers for Bear ${{ needs.check.outputs.tag }}
 
+            ## Installation Paths
+            * **Windows**: `C:\Program Files\Bear\` (via .exe installer)
+            * **Linux**: `/usr/lib/libexec/bear/` (via .deb package)
+            * **macOS**: `/usr/lib/libexec/bear/` (via .pkg installer)
+
+            ## Features
             * Built with cargo + zigbuild
             * Linux: glibc high & glibc 2.17
-            * x86 / x64 multilib
-            * Windows / macOS supported
+            * Linux x64: Includes multilib support (x86_64 + i386 preload libraries)
+            * Windows: NSIS installer with automatic PATH configuration
+            * macOS: Native .pkg installer
+            * All platforms: Platform-specific installation paths configured
           files: dist/**
 
       - uses: actions/checkout@v4
