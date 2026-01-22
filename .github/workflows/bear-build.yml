@@ -144,18 +144,6 @@ jobs:
         working-directory: bear-prebuilt
         run: bash scripts/create-macos-dmg.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
 
-      - name: Package (Linux/macOS) - Legacy
-        if: "!contains(matrix.target, 'windows')"
-        working-directory: bear-prebuilt
-        run: bash scripts/package.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
-        continue-on-error: true
-
-      - name: Package (Windows) - Legacy
-        if: contains(matrix.target, 'windows')
-        working-directory: bear-prebuilt
-        run: pwsh scripts/package.ps1 "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
-        continue-on-error: true
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

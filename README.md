@@ -1,4 +1,4 @@
-# Bear v4.0.2+ Multi-Platform Deployment
+# Bear v4+ Multi-Platform Deployment
 
 This repository contains scripts and GitHub Actions workflows to build platform-specific installers for Bear (compilation database generation tool) with custom installation paths.
 

@@ -49,10 +49,28 @@ Write-Host "✓ Found NSIS script" -ForegroundColor Green
 # Ensure LICENSE file exists (NSIS requires .txt extension)
 $LicenseSource = Join-Path $BearDir "LICENSE"
 $LicenseTarget = Join-Path $BearDir "LICENSE.txt"
-if ((Test-Path $LicenseSource) -and (-not (Test-Path $LicenseTarget)))
+
+if (Test-Path $LicenseSource)
 {
-    Copy-Item $LicenseSource $LicenseTarget
+    # Always copy/update LICENSE.txt to ensure it exists
+    Copy-Item $LicenseSource $LicenseTarget -Force
     Write-Host "✓ Created LICENSE.txt" -ForegroundColor Green
+} elseif (-not (Test-Path $LicenseTarget))
+{
+    # If no LICENSE file exists at all, create a minimal one
+    Write-Host "Warning: LICENSE file not found, creating minimal license" -ForegroundColor Yellow
+    $MinimalLicense = @"
+Bear - Build EAR (Compilation Database) Tool
+
+This is a prebuilt distribution of Bear.
+
+For full license information, please visit:
+https://github.com/rizsotto/Bear
+
+Copyright (c) Bear Development Team
+"@
+    Set-Content -Path $LicenseTarget -Value $MinimalLicense
+    Write-Host "✓ Created minimal LICENSE.txt" -ForegroundColor Green
 }
 
 # Create distribution directory
