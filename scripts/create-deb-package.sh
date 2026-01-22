@@ -73,25 +73,30 @@ fi
 
 echo "✓ Created package directory structure"
 
-# Copy main binaries (x86_64)
-if [ -f "$BEAR_DIR/target/release/bear" ]; then
-    cp "$BEAR_DIR/target/release/bear" "$PKG_DIR/usr/lib/libexec/bear/"
-    echo "✓ Copied bear binary (x86_64)"
+# Determine the actual target directory
+# Strip .2.17 suffix if present (e.g., x86_64-unknown-linux-gnu.2.17 -> x86_64-unknown-linux-gnu)
+ACTUAL_TARGET="${TARGET_TRIPLE%.2.17}"
+TARGET_DIR="$BEAR_DIR/target/$ACTUAL_TARGET/release"
+
+# Copy main binaries
+if [ -f "$TARGET_DIR/bear" ]; then
+    cp "$TARGET_DIR/bear" "$PKG_DIR/usr/lib/libexec/bear/"
+    echo "✓ Copied bear binary ($ACTUAL_TARGET)"
 else
-    echo "Error: bear binary not found at $BEAR_DIR/target/release/bear"
+    echo "Error: bear binary not found at $TARGET_DIR/bear"
     exit 1
 fi
 
 # Copy wrapper if exists
-if [ -f "$BEAR_DIR/target/release/wrapper" ]; then
-    cp "$BEAR_DIR/target/release/wrapper" "$PKG_DIR/usr/lib/libexec/bear/"
+if [ -f "$TARGET_DIR/wrapper" ]; then
+    cp "$TARGET_DIR/wrapper" "$PKG_DIR/usr/lib/libexec/bear/"
     echo "✓ Copied wrapper binary"
 fi
 
-# Copy x86_64 shared libraries
-if compgen -G "$BEAR_DIR/target/release/*.so" > /dev/null; then
-    cp "$BEAR_DIR/target/release"/*.so "$PKG_DIR/usr/lib/libexec/bear/x86_64-linux-gnu/" 2>/dev/null || true
-    echo "✓ Copied x86_64 shared libraries"
+# Copy shared libraries
+if compgen -G "$TARGET_DIR/*.so" > /dev/null; then
+    cp "$TARGET_DIR"/*.so "$PKG_DIR/usr/lib/libexec/bear/x86_64-linux-gnu/" 2>/dev/null || true
+    echo "✓ Copied shared libraries"
 fi
 
 # For x64 multilib: build and copy i686 (32-bit) preload libraries

@@ -59,32 +59,37 @@ mkdir -p "$BEAR_INSTALL_DIR"
 
 echo "✓ Created Bear installation directory"
 
+# Determine the actual target directory
+# Strip .2.17 suffix if present (though macOS targets don't typically have this)
+ACTUAL_TARGET="${TARGET_TRIPLE%.2.17}"
+TARGET_DIR="$BEAR_DIR/target/$ACTUAL_TARGET/release"
+
 # Copy binaries
-if [ -f "$BEAR_DIR/target/release/bear" ]; then
-    cp "$BEAR_DIR/target/release/bear" "$BEAR_INSTALL_DIR/"
-    echo "✓ Copied bear binary"
+if [ -f "$TARGET_DIR/bear" ]; then
+    cp "$TARGET_DIR/bear" "$BEAR_INSTALL_DIR/"
+    echo "✓ Copied bear binary ($ACTUAL_TARGET)"
 else
-    echo "Error: bear binary not found at $BEAR_DIR/target/release/bear"
+    echo "Error: bear binary not found at $TARGET_DIR/bear"
     exit 1
 fi
 
 # Copy wrapper if exists
-if [ -f "$BEAR_DIR/target/release/wrapper" ]; then
-    cp "$BEAR_DIR/target/release/wrapper" "$BEAR_INSTALL_DIR/"
+if [ -f "$TARGET_DIR/wrapper" ]; then
+    cp "$TARGET_DIR/wrapper" "$BEAR_INSTALL_DIR/"
     echo "✓ Copied wrapper binary"
 fi
 
 # Copy shared libraries (dylib on macOS)
-if compgen -G "$BEAR_DIR/target/release/*.dylib" > /dev/null 2>/dev/null; then
-    cp "$BEAR_DIR/target/release"/*.dylib "$BEAR_INSTALL_DIR/" 2>/dev/null || true
+if compgen -G "$TARGET_DIR/*.dylib" > /dev/null 2>/dev/null; then
+    cp "$TARGET_DIR"/*.dylib "$BEAR_INSTALL_DIR/" 2>/dev/null || true
     echo "✓ Copied shared libraries"
 fi
 
 # Copy architecture-specific library directories if they exist
 for libdir in x86_64 arm64; do
-    if [ -d "$BEAR_DIR/target/release/$libdir" ] && compgen -G "$BEAR_DIR/target/release/$libdir/*.dylib" > /dev/null 2>&1; then
+    if [ -d "$TARGET_DIR/$libdir" ] && compgen -G "$TARGET_DIR/$libdir/*.dylib" > /dev/null 2>&1; then
         mkdir -p "$BEAR_INSTALL_DIR/$libdir"
-        cp "$BEAR_DIR/target/release/$libdir"/*.dylib "$BEAR_INSTALL_DIR/$libdir/" || true
+        cp "$TARGET_DIR/$libdir"/*.dylib "$BEAR_INSTALL_DIR/$libdir/" || true
         echo "✓ Copied libraries for $libdir"
     fi
 done
