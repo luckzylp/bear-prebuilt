@@ -100,16 +100,9 @@ Section "Bear Core Files" SecCore
     IfFileExists "${BASE_DIR}\README.md" 0 +2
     File "${BASE_DIR}\README.md"
 
-    ; Install license file (prefer LICENSE.txt, fall back to LICENSE)
-    StrCpy $R0 "0"
-    IfFileExists "${BASE_DIR}\LICENSE.txt" 0 SkipLicenseTxt
+    ; Install license file (LICENSE.txt is prepared by the build script)
+    IfFileExists "${BASE_DIR}\LICENSE.txt" 0 +2
     File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
-    StrCpy $R0 "1"
-    SkipLicenseTxt:
-    IfFileExists "${BASE_DIR}\LICENSE" 0 SkipLicense
-    StrCmp $R0 "1" SkipLicense 0
-    File /oname=LICENSE.txt "${BASE_DIR}\LICENSE"
-    SkipLicense:
 
     ; Write installation directory to registry
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
