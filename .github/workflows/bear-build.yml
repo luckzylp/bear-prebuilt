@@ -1,4 +1,4 @@
-name: Bear Auto Prebuilt
+name: Bear Prebuilt
 
 on:
   workflow_dispatch:
