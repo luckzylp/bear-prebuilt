@@ -9,6 +9,7 @@
 !define PUBLISHER "Bear Development Team"
 !define INSTALL_DIR "C:\Program Files\Bear"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+!define BASE_DIR "..\..\Bear"
 
 ;--------------------------------
 ; Includes
@@ -45,7 +46,7 @@ SetCompressor /SOLID lzma
 ; Pages
 
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "..\..\Bear\LICENSE.txt"
+!insertmacro MUI_PAGE_LICENSE "${BASE_DIR}\LICENSE.txt"
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirectoryPre
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -85,29 +86,29 @@ Section "Bear Core Files" SecCore
     SetOutPath "$INSTDIR"
 
     ; Install executables
-    File /oname=bear.exe "..\..\Bear\${TARGET_DIR}\bear.exe"
+    File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
 
     ; Install wrapper if it exists
-    IfFileExists "..\..\Bear\${TARGET_DIR}\wrapper.exe" 0 +2
-    File /oname=wrapper.exe "..\..\Bear\${TARGET_DIR}\wrapper.exe"
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +2
+    File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
 
     ; Install library files if they exist
-    IfFileExists "..\..\Bear\${TARGET_DIR}\*.dll" 0 +2
-    File "..\..\Bear\${TARGET_DIR}\*.dll"
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" 0 +2
+    File "${BASE_DIR}\${TARGET_DIR}\*.dll"
 
     ; Install documentation
-    IfFileExists "..\..\Bear\README.md" 0 +2
-    File "..\..\Bear\README.md"
+    IfFileExists "${BASE_DIR}\README.md" 0 +2
+    File "${BASE_DIR}\README.md"
 
     ; Install license file (prefer LICENSE.txt, fall back to LICENSE)
     StrCpy $R0 "0"
-    IfFileExists "..\..\Bear\LICENSE.txt" 0 SkipLicenseTxt
-    File /oname=LICENSE.txt "..\..\Bear\LICENSE.txt"
+    IfFileExists "${BASE_DIR}\LICENSE.txt" 0 SkipLicenseTxt
+    File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
     StrCpy $R0 "1"
     SkipLicenseTxt:
-    IfFileExists "..\..\Bear\LICENSE" 0 SkipLicense
+    IfFileExists "${BASE_DIR}\LICENSE" 0 SkipLicense
     StrCmp $R0 "1" SkipLicense 0
-    File /oname=LICENSE.txt "..\..\Bear\LICENSE"
+    File /oname=LICENSE.txt "${BASE_DIR}\LICENSE"
     SkipLicense:
 
     ; Write installation directory to registry
