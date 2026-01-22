@@ -1,0 +1,8 @@
+Bear - Build EAR (Compilation Database) Tool
+
+This is a prebuilt distribution of Bear.
+
+For full license information, please visit:
+https://github.com/rizsotto/Bear
+
+Copyright (c) Bear Development Team

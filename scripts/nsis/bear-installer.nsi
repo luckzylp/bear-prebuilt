@@ -17,6 +17,8 @@
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "WinMessages.nsh"
+!include "FileFunc.nsh"
+!insertmacro GetSize
 
 ;--------------------------------
 ; General Configuration
@@ -301,7 +303,3 @@ Function un.StrRep
     Pop $R4
     Exch $R1
 FunctionEnd
-
-; GetSize function
-!include "FileFunc.nsh"
-!insertmacro GetSize
