@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+
+# Pre-removal script
+# Clean up before package removal
+
+exit 0

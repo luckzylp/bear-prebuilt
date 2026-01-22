@@ -66,6 +66,39 @@ if (-not (Test-Path $DistDir))
 Write-Host ""
 Write-Host "Building installer..." -ForegroundColor Cyan
 
+# Find NSIS executable
+$NSISPath = $null
+$PossiblePaths = @(
+    "C:\Program Files (x86)\NSIS\makensis.exe",
+    "C:\Program Files\NSIS\makensis.exe",
+    "$env:ProgramFiles\NSIS\makensis.exe",
+    "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+)
+
+foreach ($Path in $PossiblePaths)
+{
+    if (Test-Path $Path)
+    {
+        $NSISPath = $Path
+        break
+    }
+}
+
+# Try to find in PATH
+if (-not $NSISPath)
+{
+    $NSISPath = Get-Command makensis.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+}
+
+if (-not $NSISPath)
+{
+    Write-Host "Error: NSIS not found. Please install NSIS from https://nsis.sourceforge.io/" -ForegroundColor Red
+    Write-Host "Or install via Chocolatey: choco install nsis" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "✓ Found NSIS at: $NSISPath" -ForegroundColor Green
+
 $NSISArgs = @(
     "/DAPP_VERSION=$Version",
     "/V4",  # Verbose level 4

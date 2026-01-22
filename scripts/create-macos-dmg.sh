@@ -32,7 +32,7 @@ echo "Mode: wrapper (default for macOS)"
 
 # Determine directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BEAR_DIR="$PROJECT_ROOT/Bear"
 BUILD_DIR="$PROJECT_ROOT/build/macos"
 DIST_DIR="$PROJECT_ROOT/dist"
