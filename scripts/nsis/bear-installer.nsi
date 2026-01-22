@@ -91,10 +91,6 @@ Section "Bear Core Files" SecCore
     IfFileExists "..\..\Bear\${TARGET_DIR}\wrapper.exe" 0 +2
     File /oname=wrapper.exe "..\..\Bear\${TARGET_DIR}\wrapper.exe"
 
-    ; Install intercept if it exists
-    IfFileExists "..\..\Bear\${TARGET_DIR}\intercept.exe" 0 +2
-    File /oname=intercept.exe "..\..\Bear\${TARGET_DIR}\intercept.exe"
-
     ; Install library files if they exist
     IfFileExists "..\..\Bear\${TARGET_DIR}\*.dll" 0 +2
     File "..\..\Bear\${TARGET_DIR}\*.dll"
@@ -147,7 +143,6 @@ Section "Uninstall"
     ; Remove files
     Delete "$INSTDIR\bear.exe"
     Delete "$INSTDIR\wrapper.exe"
-    Delete "$INSTDIR\intercept.exe"
     Delete "$INSTDIR\*.dll"
     Delete "$INSTDIR\README.md"
     Delete "$INSTDIR\LICENSE.txt"
