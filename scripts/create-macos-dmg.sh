@@ -105,6 +105,32 @@ if [ -f "$BEAR_DIR/LICENSE" ]; then
     echo "✓ Copied LICENSE"
 fi
 
+# Copy man pages from Bear repository
+if [ -d "$BEAR_DIR/man" ]; then
+    echo ""
+    echo "Copying man pages..."
+    mkdir -p "$RESOURCES_DIR/usr/share/man/man1"
+
+    # Copy all man pages from Bear/man directory
+    MAN_COUNT=0
+    for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
+        if [ -f "$manfile" ]; then
+            cp "$manfile" "$RESOURCES_DIR/usr/share/man/man1/"
+            MAN_COUNT=$((MAN_COUNT + 1))
+        fi
+    done
+
+    if [ $MAN_COUNT -gt 0 ]; then
+        # Compress man pages (macOS standard)
+        gzip -9 "$RESOURCES_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
+        echo "✓ Copied and compressed $MAN_COUNT man page(s)"
+    else
+        echo "Warning: No man pages found in $BEAR_DIR/man"
+    fi
+else
+    echo "Warning: man directory not found at $BEAR_DIR/man"
+fi
+
 # Set permissions
 chmod 755 "$BEAR_INSTALL_DIR/bear"
 if [ -f "$BEAR_INSTALL_DIR/wrapper" ]; then
@@ -154,12 +180,28 @@ if [ -L /usr/local/bin/bear ]; then
 fi
 ln -s "$INSTALL_DIR/bear" /usr/local/bin/bear
 
+# Install man pages if available
+if [ -d "$RESOURCES_DIR/usr/share/man/man1" ]; then
+    echo "Installing man pages..."
+    mkdir -p /usr/local/share/man/man1
+    cp "$RESOURCES_DIR/usr/share/man/man1"/*.gz /usr/local/share/man/man1/ 2>/dev/null || true
+
+    # Update man database if makewhatis is available
+    if command -v makewhatis >/dev/null 2>&1; then
+        makewhatis /usr/local/share/man 2>/dev/null || true
+    fi
+fi
+
 echo ""
 echo "✓ Bear installed successfully!"
 echo "✓ Installed to: $INSTALL_DIR"
 echo "✓ Symlink created: /usr/local/bin/bear"
+if [ -d "$RESOURCES_DIR/usr/share/man/man1" ]; then
+    echo "✓ Man pages installed: /usr/local/share/man/man1"
+fi
 echo ""
 echo "You can now run 'bear' from the command line."
+echo "View help with: man bear"
 INSTALL_SCRIPT_EOF
 
 chmod 755 "$MACOS_DIR/install.sh"
@@ -256,28 +298,32 @@ DMG_TEMP="$BUILD_DIR/bear-temp.dmg"
 # Remove old DMG if exists
 rm -f "$DMG_FILE" "$DMG_TEMP"
 
-# Create temporary DMG
-hdiutil create -volname "Bear $VERSION" \
-    -srcfolder "$DMG_STAGING" \
-    -ov -format UDRW \
-    "$DMG_TEMP"
+# Check if running on macOS (hdiutil available)
+if command -v hdiutil &> /dev/null; then
+    echo "Using macOS hdiutil to create DMG..."
 
-echo "✓ Created temporary DMG"
+    # Create temporary DMG
+    hdiutil create -volname "Bear $VERSION" \
+        -srcfolder "$DMG_STAGING" \
+        -ov -format UDRW \
+        "$DMG_TEMP"
 
-# Mount the temporary DMG
-MOUNT_DIR="/Volumes/Bear $VERSION"
-hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR"
+    echo "✓ Created temporary DMG"
 
-echo "✓ Mounted temporary DMG"
+    # Mount the temporary DMG
+    MOUNT_DIR="/Volumes/Bear $VERSION"
+    hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR"
 
-# Add symlink to Applications (optional, for convenience)
-# Note: This won't actually install Bear, just provides easy access to the installer
-ln -s /Applications "$MOUNT_DIR/Applications" 2>/dev/null || true
+    echo "✓ Mounted temporary DMG"
 
-# Set DMG background and icon positions (if running on macOS with GUI)
-if command -v osascript &> /dev/null; then
-    echo "Configuring DMG appearance..."
-    osascript << APPLESCRIPT_EOF
+    # Add symlink to Applications (optional, for convenience)
+    # Note: This won't actually install Bear, just provides easy access to the installer
+    ln -s /Applications "$MOUNT_DIR/Applications" 2>/dev/null || true
+
+    # Set DMG background and icon positions (if running on macOS with GUI)
+    if command -v osascript &> /dev/null; then
+        echo "Configuring DMG appearance..."
+        osascript << APPLESCRIPT_EOF
 tell application "Finder"
     tell disk "Bear $VERSION"
         open
@@ -297,26 +343,40 @@ tell application "Finder"
     end tell
 end tell
 APPLESCRIPT_EOF
-    echo "✓ Configured DMG appearance"
+        echo "✓ Configured DMG appearance"
+    else
+        echo "Note: Running in non-GUI environment, skipping DMG appearance configuration"
+    fi
+
+    # Unmount
+    hdiutil detach "$MOUNT_DIR" -force
+
+    echo "✓ Unmounted DMG"
+
+    # Convert to compressed read-only DMG
+    hdiutil convert "$DMG_TEMP" \
+        -format UDZO \
+        -imagekey zlib-level=9 \
+        -o "$DMG_FILE"
+
+    echo "✓ Compressed DMG"
+
+    # Clean up temporary DMG
+    rm -f "$DMG_TEMP"
 else
-    echo "Note: Running in non-GUI environment, skipping DMG appearance configuration"
+    # Not on macOS - create a tar.gz archive instead
+    echo "Warning: hdiutil not found (not running on macOS)"
+    echo "Creating tar.gz archive as fallback..."
+
+    cd "$BUILD_DIR"
+    tar czf "$DMG_FILE.tar.gz" -C dmg-staging .
+
+    # Rename to keep .dmg extension for compatibility
+    mv "$DMG_FILE.tar.gz" "${DMG_FILE%.dmg}.tar.gz"
+    DMG_FILE="${DMG_FILE%.dmg}.tar.gz"
+
+    echo "✓ Created tar.gz archive (use on macOS to extract and create proper DMG)"
 fi
-
-# Unmount
-hdiutil detach "$MOUNT_DIR" -force
-
-echo "✓ Unmounted DMG"
-
-# Convert to compressed read-only DMG
-hdiutil convert "$DMG_TEMP" \
-    -format UDZO \
-    -imagekey zlib-level=9 \
-    -o "$DMG_FILE"
-
-echo "✓ Compressed DMG"
-
-# Clean up temporary DMG
-rm -f "$DMG_TEMP"
 
 if [ -f "$DMG_FILE" ]; then
     echo ""

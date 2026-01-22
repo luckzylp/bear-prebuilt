@@ -158,6 +158,32 @@ if [ -f "$BEAR_DIR/LICENSE" ]; then
     echo "✓ Copied LICENSE"
 fi
 
+# Copy man pages from Bear repository
+if [ -d "$BEAR_DIR/man" ]; then
+    echo ""
+    echo "Copying man pages..."
+    mkdir -p "$PKG_DIR/usr/share/man/man1"
+
+    # Copy all man pages from Bear/man directory
+    MAN_COUNT=0
+    for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
+        if [ -f "$manfile" ]; then
+            cp "$manfile" "$PKG_DIR/usr/share/man/man1/"
+            MAN_COUNT=$((MAN_COUNT + 1))
+        fi
+    done
+
+    if [ $MAN_COUNT -gt 0 ]; then
+        # Compress man pages
+        gzip -9 "$PKG_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
+        echo "✓ Copied and compressed $MAN_COUNT man page(s)"
+    else
+        echo "Warning: No man pages found in $BEAR_DIR/man"
+    fi
+else
+    echo "Warning: man directory not found at $BEAR_DIR/man"
+fi
+
 # Create control file
 cat "$DEBIAN_DIR/control.template" | \
     sed "s/VERSION_PLACEHOLDER/$VERSION/g" | \
@@ -176,13 +202,22 @@ echo "✓ Created control file"
 INSTALLED_SIZE=$(du -sk "$PKG_DIR" | cut -f1)
 echo "Installed-Size: $INSTALLED_SIZE" >> "$PKG_DIR/DEBIAN/control"
 
-# Copy postinst and prerm scripts
-cp "$DEBIAN_DIR/postinst" "$PKG_DIR/DEBIAN/"
-cp "$DEBIAN_DIR/prerm" "$PKG_DIR/DEBIAN/"
-chmod 755 "$PKG_DIR/DEBIAN/postinst"
-chmod 755 "$PKG_DIR/DEBIAN/prerm"
+# Copy postinst and prerm scripts if they exist
+if [ -f "$DEBIAN_DIR/postinst" ]; then
+    cp "$DEBIAN_DIR/postinst" "$PKG_DIR/DEBIAN/"
+    chmod 755 "$PKG_DIR/DEBIAN/postinst"
+    echo "✓ Copied postinst script"
+else
+    echo "Warning: postinst script not found at $DEBIAN_DIR/postinst"
+fi
 
-echo "✓ Copied maintainer scripts"
+if [ -f "$DEBIAN_DIR/prerm" ]; then
+    cp "$DEBIAN_DIR/prerm" "$PKG_DIR/DEBIAN/"
+    chmod 755 "$PKG_DIR/DEBIAN/prerm"
+    echo "✓ Copied prerm script"
+else
+    echo "Warning: prerm script not found at $DEBIAN_DIR/prerm"
+fi
 
 # Set permissions
 find "$PKG_DIR/usr/lib/libexec/bear" -type f -name "bear" -exec chmod 755 {} \;

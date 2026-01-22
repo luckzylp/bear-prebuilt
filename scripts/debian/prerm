@@ -1,7 +1,26 @@
 #!/bin/sh
 set -e
 
-# Pre-removal script
-# Clean up before package removal
+# Pre-removal script for Bear
+# This script runs before the package is removed
+
+case "$1" in
+    remove|deconfigure)
+        # Remove symlink if it exists and points to our installation
+        if [ -L /usr/local/bin/bear ]; then
+            LINK_TARGET=$(readlink /usr/local/bin/bear)
+            if [ "$LINK_TARGET" = "/usr/lib/libexec/bear/bear" ]; then
+                rm -f /usr/local/bin/bear
+            fi
+        fi
+        ;;
+    upgrade|failed-upgrade)
+        # Don't remove symlink during upgrade
+        ;;
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
 
 exit 0

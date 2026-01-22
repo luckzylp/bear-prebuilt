@@ -2,7 +2,10 @@
 ; Generates Windows installer with fixed installation path and PATH modification
 
 !define APP_NAME "Bear"
-!define APP_VERSION "0.0.0"  ; Will be replaced by build script
+; APP_VERSION is passed via command line: /DAPP_VERSION=x.x.x
+!ifndef APP_VERSION
+  !define APP_VERSION "0.0.0"  ; Fallback version if not specified
+!endif
 !define PUBLISHER "Bear Development Team"
 !define INSTALL_DIR "C:\Program Files\Bear"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
