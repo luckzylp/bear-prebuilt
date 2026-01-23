@@ -100,6 +100,10 @@ Section "Bear Core" SecCore
     ; Executable
     File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
 
+    ; Wrapper executable (if exists)
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +2
+    File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+
     ; Optional DLLs
     IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" 0 +2
     File "${BASE_DIR}\${TARGET_DIR}\*.dll"
@@ -137,6 +141,7 @@ SectionEnd
 
 Section "Uninstall"
     Delete "$INSTDIR\bear.exe"
+    Delete "$INSTDIR\wrapper.exe"
     Delete "$INSTDIR\*.dll"
     Delete "$INSTDIR\README.md"
     Delete "$INSTDIR\LICENSE.txt"
