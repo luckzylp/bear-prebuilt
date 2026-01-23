@@ -28,8 +28,12 @@ SetCompressor /SOLID lzma
 !include "x64.nsh"
 !include "FileFunc.nsh"
 !include "WinMessages.nsh"
+!include "WordFunc.nsh"
 
 !insertmacro GetSize
+!insertmacro GetRoot
+!insertmacro GetParent
+!insertmacro GetKeyName
 
 ; ------------------------------------------
 ; Metadata
@@ -118,6 +122,11 @@ Section "Bear Core" SecCore
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
     WriteRegStr HKLM "Software\${APP_NAME}" "Version" "${APP_VERSION}"
 
+    ; Add to system PATH
+    DetailPrint "Adding $INSTDIR to system PATH..."
+    Push "$INSTDIR"
+    Call AddToPath
+
     ; Uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -138,9 +147,14 @@ Section "Bear Core" SecCore
 SectionEnd
 
 ; ------------------------------------------
-; Uninstaller
+; Uninstall section
 
 Section "Uninstall"
+    ; Remove from system PATH
+    DetailPrint "Removing $INSTDIR from system PATH..."
+    Push "$INSTDIR"
+    Call RemoveFromPath
+
     Delete "$INSTDIR\bear.exe"
     Delete "$INSTDIR\wrapper.exe"
     Delete "$INSTDIR\*.dll"
@@ -152,3 +166,163 @@ Section "Uninstall"
     DeleteRegKey HKLM "${UNINSTALL_KEY}"
     DeleteRegKey HKLM "Software\${APP_NAME}"
 SectionEnd
+
+; ------------------------------------------
+; Helper functions for PATH management
+
+Function AddToPath
+    Exch $0
+    Push $1
+    Push $2
+    Push $3
+
+    ; Read current system PATH
+    ReadRegStr $1 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+
+    ; Check if path is already in PATH
+    StrCmp $1 "" AddPath
+    Push "$1;"
+    Push "$0;"
+    Call StrStr
+    Pop $2
+    StrCmp $2 "" AddPath
+        Goto Done
+
+    AddPath:
+    ; Append new path
+    StrCpy $2 $1 1 -1
+    StrCmp $2 ";" PathOk
+        StrCpy $1 "$1;"
+
+    PathOk:
+    StrCpy $1 "$1$0"
+
+    ; Write back to registry
+    WriteRegStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" "$1"
+
+    ; Notify shell of environment change
+    System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
+
+    DetailPrint "Added $0 to system PATH"
+
+    Done:
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+FunctionEnd
+
+Function RemoveFromPath
+    Exch $0
+    Push $1
+    Push $2
+    Push $3
+    Push $4
+
+    ; Read current system PATH
+    ReadRegStr $1 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+
+    ; Check if path exists
+    StrCmp $1 "" Done
+
+    ; Remove path from PATH (handle semicolons)
+    StrCpy $2 ""
+    StrCpy $4 "$1"
+
+    ; Find and remove $0 from $4
+    StrLen $3 "$0"
+    StrCmp $4 "" RemoveDone
+
+    RemoveLoop:
+    StrCpy $2 $4 $3
+    StrCmp $2 "$0" FoundPath
+    StrCmp $4 "" RemoveDone
+    StrCpy $2 $4 1 -1
+    StrCmp $2 ";" NoLeadingSep
+    StrCpy $4 "$4;"
+    NoLeadingSep:
+    StrCpy $4 $4 -1
+    Goto RemoveLoop
+
+    FoundPath:
+    ; Remove $0 and leading/trailing semicolons
+    StrCpy $2 $4
+    StrCpy $4 "$2"
+    StrCpy $2 $4 $3
+    StrCpy $4 "$4" "" $3
+    ; Clean up leading semicolon
+    StrCpy $2 $4 1
+    StrCmp $2 ";" StripLeading
+    Goto StripDone
+    StripLeading:
+    StrCpy $4 $4 "" 1
+    StripDone:
+    ; Clean up trailing semicolon
+    StrCpy $2 $4 1 -1
+    StrCmp $2 ";" StripTrailing
+    Goto PathDone
+    StripTrailing:
+    StrCpy $4 $4 -1
+    PathDone:
+
+    ; Write back to registry
+    WriteRegStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" "$4"
+
+    ; Notify shell of environment change
+    System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
+
+    DetailPrint "Removed $0 from system PATH"
+
+    RemoveDone:
+    Done:
+    Pop $4
+    Pop $3
+    Pop $2
+    Pop $1
+    Pop $0
+FunctionEnd
+
+; StrStr function - finds substring
+Function StrStr
+    Exch $R1 ; stack = $R1, $R2
+    Exch ; stack = $R1, $R2, $R1
+    Exch $R2 ; stack = $R2, $R1, $R2
+    Push $R3
+    Push $R4
+    Push $R5
+    Push $R6
+    Push $R7
+
+    StrCpy $R3 $R2
+    StrCpy $R4 $R1
+    StrLen $R5 $R2
+    StrLen $R6 $R1
+
+    StrCmp $R5 0 StringEnd
+
+    Loop:
+    StrCpy $R7 $R3 $R5
+    StrCmp $R7 $R2 Found
+    StrCmp $R3 "" StringEnd
+    StrCpy $R3 "$R3" -1
+    Goto Loop
+
+    Found:
+    StrCpy $R7 $R3 $R5
+    StrCmp $R7 $R2 Found2
+    StrCmp $R3 "" StringEnd
+    StrCpy $R3 "$R3" -1
+    Goto Loop
+
+    Found2:
+    StrCpy $R1 $R3
+
+    StringEnd:
+    Pop $R7
+    Pop $R6
+    Pop $R5
+    Pop $R4
+    Pop $R3
+    Pop $R2
+    Exch $R1
+FunctionEnd
