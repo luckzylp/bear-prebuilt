@@ -102,20 +102,42 @@ Section "Bear Core" SecCore
 
     ; Wrapper executable (if exists)
     DetailPrint "Checking for wrapper.exe at: ${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
-    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +3
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" HasWrapper NoWrapper
+    HasWrapper:
         DetailPrint "Found wrapper.exe, adding to installer"
         File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
-        Goto +2
+        Goto DoneWrapper
+    NoWrapper:
         DetailPrint "wrapper.exe not found, skipping"
+    DoneWrapper:
 
     ; Optional DLLs
-    IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" 0 +2
-    File "${BASE_DIR}\${TARGET_DIR}\*.dll"
+    DetailPrint "Checking for DLLs at: ${BASE_DIR}\${TARGET_DIR}\*.dll"
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" HasDLLs NoDLLs
+    HasDLLs:
+        DetailPrint "Found DLLs, adding to installer"
+        File "${BASE_DIR}\${TARGET_DIR}\*.dll"
+        Goto DoneDLLs
+    NoDLLs:
+        DetailPrint "No DLLs found, skipping"
+    DoneDLLs:
 
     ; Docs
-    IfFileExists "${BASE_DIR}\README.md" 0 +2
-    File "${BASE_DIR}\README.md"
-    File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
+    DetailPrint "Checking for README.md at: ${BASE_DIR}\README.md"
+    IfFileExists "${BASE_DIR}\README.md" HasReadme NoReadme
+    HasReadme:
+        DetailPrint "Found README.md, adding to installer"
+        File "${BASE_DIR}\README.md"
+    NoReadme:
+        DetailPrint "README.md not found, skipping"
+
+    DetailPrint "Checking for LICENSE.txt at: ${BASE_DIR}\LICENSE.txt"
+    IfFileExists "${BASE_DIR}\LICENSE.txt" HasLicense NoLicense
+    HasLicense:
+        DetailPrint "Found LICENSE.txt, adding to installer"
+        File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
+    NoLicense:
+        DetailPrint "LICENSE.txt not found, skipping"
 
     ; Registry
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
