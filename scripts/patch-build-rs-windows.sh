@@ -22,7 +22,15 @@ echo "✓ Backed up original build.rs"
 # Apply Windows-specific patch
 # Change: const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
 # To:     const DEFAULT_WRAPPER_PATH: &str = "C:/Program Files/Bear";
-sed -i 's|/usr/local/libexec/bear|C:/Program Files/Bear|g' "${BUILD_RS_PATH}"
+
+# Use sed with backup extension (works on both Linux and macOS)
+if sed --version &>/dev/null; then
+    # GNU sed (Linux)
+    sed -i 's|/usr/local/libexec/bear|C:/Program Files/Bear|g' "${BUILD_RS_PATH}"
+else
+    # BSD sed (macOS)
+    sed -i '' 's|/usr/local/libexec/bear|C:/Program Files/Bear|g' "${BUILD_RS_PATH}"
+fi
 
 echo "✓ Applied Windows patches"
 

@@ -26,9 +26,18 @@ echo "✓ Backed up original build.rs"
 # Change 2: const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
 # To:       const DEFAULT_PRELOAD_PATH: &str = "/usr/lib/libexec/bear/$LIB";
 
-sed -i \
-  -e 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' \
-  "${BUILD_RS_PATH}"
+# Use sed with backup extension (works on both Linux and macOS)
+if sed --version &>/dev/null; then
+    # GNU sed (Linux)
+    sed -i \
+      -e 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' \
+      "${BUILD_RS_PATH}"
+else
+    # BSD sed (macOS)
+    sed -i '' \
+      -e 's|/usr/local/libexec/bear|/usr/lib/libexec/bear|g' \
+      "${BUILD_RS_PATH}"
+fi
 
 echo "✓ Applied Linux patches"
 
