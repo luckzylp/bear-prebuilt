@@ -226,16 +226,7 @@ Function un.RemoveFromPath
 FunctionEnd
 
 ;--------------------------------
-; String Functions
-
-!macro _StrContainsConstructor OUT NEEDLE HAYSTACK
-  Push `${HAYSTACK}`
-  Push `${NEEDLE}`
-  Call StrContains
-  Pop `${OUT}`
-!macroend
-
-!define StrContains '!insertmacro "_StrContainsConstructor"'
+; String Function Implementations
 
 Function StrContains
   Exch $STR_NEEDLE
@@ -269,16 +260,6 @@ Function StrContains
     Pop $STR_NEEDLE
     Exch $STR_HAYSTACK
 FunctionEnd
-
-!macro _StrRepConstructor OUT OLD NEW STR
-  Push `${STR}`
-  Push `${OLD}`
-  Push `${NEW}`
-  Call un.StrRep
-  Pop `${OUT}`
-!macroend
-
-!define un.StrRep '!insertmacro "_StrRepConstructor"'
 
 Function un.StrRep
   Exch $R4
