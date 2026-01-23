@@ -119,7 +119,7 @@ jobs:
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt/Bear
         run: |
-          cargo build --release
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Install NSIS (Windows)
         if: contains(matrix.target, 'windows')
