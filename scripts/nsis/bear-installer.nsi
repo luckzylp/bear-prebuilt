@@ -27,7 +27,7 @@ SetCompressor /SOLID lzma
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "FileFunc.nsh"
-!include "EnvVarUpdate.nsh"
+!include "WinMessages.nsh"
 
 !insertmacro GetSize
 
