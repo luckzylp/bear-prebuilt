@@ -68,6 +68,8 @@ jobs:
           repository: ${{ env.BEAR_REPO }}
           ref: ${{ needs.get-version.outputs.tag }}
           path: bear-prebuilt/Bear
+          clean: true
+          fetch-depth: 1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -180,12 +182,3 @@ jobs:
             * macOS: Native .pkg installer
             * All platforms: Platform-specific installation paths configured
           files: dist/**
-
-      - uses: actions/checkout@v4
-
-      - name: Save built tag
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git commit -m "chore: built Bear ${{ needs.get-version.outputs.tag }}"
-          git push

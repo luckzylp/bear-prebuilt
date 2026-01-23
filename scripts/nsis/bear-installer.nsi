@@ -101,8 +101,12 @@ Section "Bear Core" SecCore
     File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
 
     ; Wrapper executable (if exists)
-    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +2
-    File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+    DetailPrint "Checking for wrapper.exe at: ${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +3
+        DetailPrint "Found wrapper.exe, adding to installer"
+        File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+        Goto +2
+        DetailPrint "wrapper.exe not found, skipping"
 
     ; Optional DLLs
     IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" 0 +2
