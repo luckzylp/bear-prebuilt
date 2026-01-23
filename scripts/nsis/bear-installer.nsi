@@ -21,28 +21,6 @@
 !insertmacro GetSize
 
 ;--------------------------------
-; String Functions (must be defined before use)
-
-!macro _StrContainsConstructor OUT NEEDLE HAYSTACK
-  Push `${HAYSTACK}`
-  Push `${NEEDLE}`
-  Call StrContains
-  Pop `${OUT}`
-!macroend
-
-!define StrContains '!insertmacro "_StrContainsConstructor"'
-
-!macro _StrRepConstructor OUT OLD NEW STR
-  Push `${STR}`
-  Push `${OLD}`
-  Push `${NEW}`
-  Call un.StrRep
-  Pop `${OUT}`
-!macroend
-
-!define un.StrRep '!insertmacro "_StrRepConstructor"'
-
-;--------------------------------
 ; General Configuration
 
 Name "${APP_NAME} ${APP_VERSION}"
@@ -188,7 +166,10 @@ Function AddToPath
     ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH"
 
     ; Check if already in PATH
-    ${StrContains} $1 "$INSTDIR" "$0"
+    Push "$0"
+    Push "$INSTDIR"
+    Call StrContains
+    Pop $1
     StrCmp $1 "" 0 AlreadyInPath
 
     ; Add to PATH
@@ -211,10 +192,24 @@ Function un.RemoveFromPath
     ; Read current system PATH
     ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH"
 
-    ; Remove our directory from PATH
-    ${un.StrRep} $1 $0 "$INSTDIR;" ""
-    ${un.StrRep} $0 $1 ";$INSTDIR" ""
-    ${un.StrRep} $1 $0 "$INSTDIR" ""
+    ; Remove our directory from PATH (try all variations)
+    Push "$0"
+    Push "$INSTDIR;"
+    Push ""
+    Call un.StrRep
+    Pop $1
+
+    Push "$1"
+    Push ";$INSTDIR"
+    Push ""
+    Call un.StrRep
+    Pop $0
+
+    Push "$0"
+    Push "$INSTDIR"
+    Push ""
+    Call un.StrRep
+    Pop $1
 
     ; Write updated PATH
     WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH" $1
