@@ -3,7 +3,8 @@
 
 param(
     [string]$Version = "0.0.0",
-    [string]$TargetTriple = "x86_64-pc-windows-msvc"
+    [string]$TargetTriple = "x86_64-pc-windows-msvc",
+    [string]$SourcePath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,13 +18,25 @@ Write-Host "================================================" -ForegroundColor C
 # Determine script and project directories
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
-$BearDir = Join-Path $ProjectRoot "Bear"
 $NSISDir = Join-Path $ScriptDir "nsis"
 $DistDir = Join-Path $ProjectRoot "dist"
+
+# Use custom SourcePath if provided, otherwise use default Bear directory
+if ($SourcePath -eq "")
+{
+    $BearDir = Join-Path $ProjectRoot "Bear"
+} else
+{
+    $BearDir = $SourcePath
+    Write-Host "Using custom SourcePath: $BearDir" -ForegroundColor Yellow
+}
 
 # Determine the actual target directory
 $ActualTarget = $TargetTriple -replace '\.2\.17$', ''
 $TargetDir = Join-Path $BearDir "target\$ActualTarget\release"
+
+Write-Host "BASE_DIR will be: ..\..\Bear (relative to NSIS script)" -ForegroundColor Cyan
+Write-Host "Actual target directory: $TargetDir" -ForegroundColor Cyan
 
 # Verify Bear binaries exist
 $BearExe = Join-Path $TargetDir "bear.exe"

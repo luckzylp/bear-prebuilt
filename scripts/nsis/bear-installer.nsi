@@ -100,44 +100,19 @@ Section "Bear Core" SecCore
     ; Executable
     File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
 
-    ; Wrapper executable (if exists)
-    DetailPrint "Checking for wrapper.exe at: ${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
-    IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" HasWrapper NoWrapper
-    HasWrapper:
-        DetailPrint "Found wrapper.exe, adding to installer"
-        File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
-        Goto DoneWrapper
-    NoWrapper:
-        DetailPrint "wrapper.exe not found, skipping"
-    DoneWrapper:
+    ; Wrapper executable - always include, will be silently skipped if not found
+    DetailPrint "Including wrapper.exe from: ${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+    File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
 
-    ; Optional DLLs
-    DetailPrint "Checking for DLLs at: ${BASE_DIR}\${TARGET_DIR}\*.dll"
-    IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" HasDLLs NoDLLs
-    HasDLLs:
-        DetailPrint "Found DLLs, adding to installer"
-        File "${BASE_DIR}\${TARGET_DIR}\*.dll"
-        Goto DoneDLLs
-    NoDLLs:
-        DetailPrint "No DLLs found, skipping"
-    DoneDLLs:
+    ; Optional DLLs - always try to include
+    DetailPrint "Including DLLs from: ${BASE_DIR}\${TARGET_DIR}\*.dll"
+    File "${BASE_DIR}\${TARGET_DIR}\*.dll"
 
     ; Docs
-    DetailPrint "Checking for README.md at: ${BASE_DIR}\README.md"
-    IfFileExists "${BASE_DIR}\README.md" HasReadme NoReadme
-    HasReadme:
-        DetailPrint "Found README.md, adding to installer"
-        File "${BASE_DIR}\README.md"
-    NoReadme:
-        DetailPrint "README.md not found, skipping"
-
-    DetailPrint "Checking for LICENSE.txt at: ${BASE_DIR}\LICENSE.txt"
-    IfFileExists "${BASE_DIR}\LICENSE.txt" HasLicense NoLicense
-    HasLicense:
-        DetailPrint "Found LICENSE.txt, adding to installer"
-        File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
-    NoLicense:
-        DetailPrint "LICENSE.txt not found, skipping"
+    DetailPrint "Including README.md"
+    File "${BASE_DIR}\README.md"
+    DetailPrint "Including LICENSE.txt"
+    File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
 
     ; Registry
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
