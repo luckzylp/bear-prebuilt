@@ -117,12 +117,12 @@ if (-not $NSISPath)
 
 Write-Host "✓ Found NSIS at: $NSISPath" -ForegroundColor Green
 
-$NSISArgs = @((
+$NSISArgs = @(
     "/DAPP_VERSION=$Version",
-    "/DTARGET_DIR=target\$ActualTarget\release",
+    "/DTARGET_TRIPLE=$ActualTarget",
     "/V4",  # Verbose level 4
     $NSISScript
-))
+)
 
 & $NSISPath $NSISArgs
 
