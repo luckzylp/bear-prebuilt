@@ -119,7 +119,7 @@ jobs:
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt/Bear
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release
 
       - name: Install NSIS (Windows)
         if: contains(matrix.target, 'windows')
@@ -185,9 +185,7 @@ jobs:
 
       - name: Save built tag
         run: |
-          echo "${{ needs.get-version.outputs.tag }}" > last_built_tag
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add last_built_tag
           git commit -m "chore: built Bear ${{ needs.get-version.outputs.tag }}"
           git push
