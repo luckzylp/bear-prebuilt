@@ -130,17 +130,12 @@ Section "Bear Core" SecCore
     ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
     IntFmt $0 "0x%08X" $0
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "EstimatedSize" "$0"
-
-    ; PATH (system)
-    ${EnvVarUpdate} $0 "PATH" "A" "HKLM" "$INSTDIR"
 SectionEnd
 
 ; ------------------------------------------
 ; Uninstaller
 
 Section "Uninstall"
-    ${EnvVarUpdate} $0 "PATH" "R" "HKLM" "$INSTDIR"
-
     Delete "$INSTDIR\bear.exe"
     Delete "$INSTDIR\*.dll"
     Delete "$INSTDIR\README.md"
