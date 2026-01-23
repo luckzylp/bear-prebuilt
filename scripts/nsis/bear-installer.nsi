@@ -21,6 +21,28 @@
 !insertmacro GetSize
 
 ;--------------------------------
+; String Functions (must be defined before use)
+
+!macro _StrContainsConstructor OUT NEEDLE HAYSTACK
+  Push `${HAYSTACK}`
+  Push `${NEEDLE}`
+  Call StrContains
+  Pop `${OUT}`
+!macroend
+
+!define StrContains '!insertmacro "_StrContainsConstructor"'
+
+!macro _StrRepConstructor OUT OLD NEW STR
+  Push `${STR}`
+  Push `${OLD}`
+  Push `${NEW}`
+  Call un.StrRep
+  Pop `${OUT}`
+!macroend
+
+!define un.StrRep '!insertmacro "_StrRepConstructor"'
+
+;--------------------------------
 ; General Configuration
 
 Name "${APP_NAME} ${APP_VERSION}"
