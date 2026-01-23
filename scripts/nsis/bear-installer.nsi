@@ -24,7 +24,6 @@
 !include "x64.nsh"
 !include "WinMessages.nsh"
 !include "FileFunc.nsh"
-!include "EnvVarUpdate.nsh"
 
 !insertmacro GetSize
 
@@ -65,6 +64,16 @@ SetCompressor /SOLID lzma
 !insertmacro MUI_UNPAGE_INSTFILES
 
 !insertmacro MUI_LANGUAGE "English"
+
+;--------------------------------
+; Lock install directory (fixed path)
+; Add to system PATH
+ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+StrCpy $1 "$0;$INSTDIR"
+WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" "$1"
+
+; Update of broadcast environment variables
+SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment"
 
 ;--------------------------------
 ; Lock install directory (fixed path)
