@@ -162,30 +162,31 @@ SectionEnd
 ; PATH Modification Functions
 
 Function AddToPath
-    ; Read current system PATH
-    ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH"
+    ReadRegStr $0 HKLM \
+      "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
+      "PATH"
 
     ; Check if already in PATH
-    Push "$0"
-    Push "$INSTDIR"
-    Call StrContains
-    Pop $1
-    StrCmp $1 "" 0 AlreadyInPath
+    ${StrStr} $1 $0 "$INSTDIR"
+    StrCmp $1 "" +2
+        Goto AlreadyInPath
 
     ; Add to PATH
     StrCpy $0 "$0;$INSTDIR"
-    WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH" $0
+    WriteRegExpandStr HKLM \
+      "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
+      "PATH" $0
 
-    ; Broadcast environment change
-    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 \
+      "STR:Environment" /TIMEOUT=5000
 
     DetailPrint "Added $INSTDIR to system PATH"
     Goto Done
 
-    AlreadyInPath:
-        DetailPrint "$INSTDIR already in PATH"
+AlreadyInPath:
+    DetailPrint "$INSTDIR already in PATH"
 
-    Done:
+Done:
 FunctionEnd
 
 Function un.RemoveFromPath
@@ -218,42 +219,6 @@ Function un.RemoveFromPath
     SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
 
     DetailPrint "Removed $INSTDIR from system PATH"
-FunctionEnd
-
-;--------------------------------
-; String Function Implementations
-
-Function StrContains
-  Exch $STR_NEEDLE
-  Exch 1
-  Exch $STR_HAYSTACK
-  Push $STR_LEN
-  Push $STR_POS
-  Push $STR_TEMP
-
-  StrLen $STR_LEN $STR_NEEDLE
-  StrCpy $STR_POS 0
-
-  loop:
-    StrCpy $STR_TEMP $STR_HAYSTACK $STR_LEN $STR_POS
-    StrCmp $STR_TEMP $STR_NEEDLE found
-    IntOp $STR_POS $STR_POS + 1
-    StrCpy $STR_TEMP $STR_HAYSTACK 1 $STR_POS
-    StrCmp $STR_TEMP "" done loop
-
-  found:
-    StrCpy $STR_HAYSTACK $STR_NEEDLE
-    Goto end
-
-  done:
-    StrCpy $STR_HAYSTACK ""
-
-  end:
-    Pop $STR_TEMP
-    Pop $STR_POS
-    Pop $STR_LEN
-    Pop $STR_NEEDLE
-    Exch $STR_HAYSTACK
 FunctionEnd
 
 Function un.StrRep
