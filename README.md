@@ -6,7 +6,7 @@ This repository contains scripts and GitHub Actions workflows to build platform-
 
 Automated build system for Bear with platform-specific configurations:
 
-- **Windows**: NSIS installer with fixed installation path and automatic PATH configuration
+- **Windows**: NSIS installer with fixed installation path
 - **Linux**: Debian packages with multilib support (x64 includes both 64-bit and 32-bit libraries)
 - **macOS**: Native .pkg installer (wrapper mode)
 
@@ -22,7 +22,6 @@ Automated build system for Bear with platform-specific configurations:
 
 ### Windows (MSVC)
 - **Installation Path**: `C:\Program Files\Bear\` (fixed, cannot be modified)
-- **PATH Configuration**: Automatically added to system PATH during installation
 - **Build.rs Modification**: `DEFAULT_WRAPPER_PATH = "C:/Program Files/Bear"`
 - **Installer Features**:
   - NSIS-based installer
@@ -223,7 +222,6 @@ bear-prebuilt/
 
 ### ✅ Windows
 - Fixed installation directory (`C:\Program Files\Bear\`)
-- Automatic PATH environment variable configuration
 - Professional NSIS installer with uninstaller
 - Registered in Windows Add/Remove Programs
 
@@ -251,9 +249,6 @@ bear-prebuilt/
 ### Windows
 **Issue**: Installation fails with permission error  
 **Solution**: Run installer as Administrator
-
-**Issue**: Bear not found in PATH  
-**Solution**: Restart terminal/PowerShell after installation
 
 ### Linux
 **Issue**: 32-bit builds not intercepted on x64  
