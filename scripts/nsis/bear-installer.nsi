@@ -75,19 +75,19 @@ FunctionEnd
 ; Architecture sanity check (runtime)
 
 Function .onInit
-    ${If} ${RunningARM64}
-        StrCmp "${TARGET_TRIPLE}" "aarch64-pc-windows-msvc" ok
-        MessageBox MB_ICONSTOP "This installer is not for ARM64 Windows."
-        Abort
-    ${ElseIf} ${RunningX64}
-        StrCmp "${TARGET_TRIPLE}" "x86_64-pc-windows-msvc" ok
-        MessageBox MB_ICONSTOP "This installer is not for x64 Windows."
+    ; Check if running on x64 Windows
+    ${If} ${RunningX64}
+        ; This is x64 Windows, check if installer matches
+        StrCmp "${TARGET_TRIPLE}" "x86_64-pc-windows-msvc" ok_arch 0
+        MessageBox MB_ICONSTOP "This installer is for x86_64 architecture but you are trying to install on a different architecture."
         Abort
     ${Else}
-        MessageBox MB_ICONSTOP "Unsupported Windows architecture."
+        ; Not x64, could be ARM64 or x86
+        StrCmp "${TARGET_TRIPLE}" "aarch64-pc-windows-msvc" ok_arch 0
+        MessageBox MB_ICONSTOP "This installer requires 64-bit Windows."
         Abort
     ${EndIf}
-ok:
+ok_arch:
 FunctionEnd
 
 ; ------------------------------------------
