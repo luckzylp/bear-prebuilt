@@ -167,18 +167,18 @@ jobs:
           tag_name: bear-${{ needs.get-version.outputs.tag }}
           name: Bear ${{ needs.get-version.outputs.tag }} (Prebuilt)
           body: |
-            Automated prebuilt binaries and installers for Bear ${{ needs.get-version.outputs.tag }}
+            Automated prebuilt binaries and installers for Bear v${{ needs.get-version.outputs.tag }}
 
             ## Installation Paths
             * **Windows**: `C:\Program Files\Bear\` (via .exe installer)
             * **Linux**: `/usr/lib/libexec/bear/` (via .deb package)
-            * **macOS**: `/usr/lib/libexec/bear/` (via .pkg installer)
+            * **macOS**: `/usr/lib/libexec/bear/` (via .dmg installer)
 
             ## Features
             * Built with cargo + zigbuild
             * Linux: glibc high & glibc 2.17
             * Linux x64: Includes multilib support (x86_64 + i386 preload libraries)
             * Windows: NSIS installer with automatic PATH configuration
-            * macOS: Native .pkg installer
+            * macOS: Native .dmg installer
             * All platforms: Platform-specific installation paths configured
           files: dist/**
