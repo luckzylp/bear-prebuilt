@@ -28,12 +28,8 @@ SetCompressor /SOLID lzma
 !include "x64.nsh"
 !include "FileFunc.nsh"
 !include "WinMessages.nsh"
-!include "WordFunc.nsh"
 
 !insertmacro GetSize
-!insertmacro GetRoot
-!insertmacro GetParent
-!insertmacro GetKeyName
 
 ; ------------------------------------------
 ; Metadata
