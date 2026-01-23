@@ -247,7 +247,7 @@ fi
 if [ $? -eq 0 ]; then
 	# Move to dist directory
 	DEB_FILE="${PKG_NAME}.deb"
-	DIST_FILE="$DIST_DIR/${TARGET_TRIPLE}.deb"
+	DIST_FILE="$DIST_DIR/bear-${VERSION}-${TARGET_TRIPLE}.deb"
 
 	mv "$DEB_FILE" "$DIST_FILE"
 
