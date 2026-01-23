@@ -149,7 +149,7 @@ Section "Uninstall"
     ; Remove from system PATH
     DetailPrint "Removing $INSTDIR from system PATH..."
     Push "$INSTDIR"
-    Call RemoveFromPath
+    Call un.RemoveFromPath
 
     Delete "$INSTDIR\bear.exe"
     Delete "$INSTDIR\wrapper.exe"
@@ -208,7 +208,7 @@ Function AddToPath
     Pop $0
 FunctionEnd
 
-Function RemoveFromPath
+Function un.RemoveFromPath
     Exch $0
     Push $1
     Push $2
