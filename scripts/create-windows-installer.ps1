@@ -133,7 +133,7 @@ if ($LASTEXITCODE -ne 0)
 }
 
 # Move installer to dist directory
-$InstallerName = "bear-$Version-windows-installer.exe"
+$InstallerName = "bear-$Version-$TargetTriple-installer.exe"
 $InstallerSource = Join-Path $NSISDir $InstallerName
 $InstallerTarget = Join-Path $DistDir "$TargetTriple-installer.exe"
 
