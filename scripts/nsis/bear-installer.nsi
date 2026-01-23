@@ -1,15 +1,21 @@
 ; NSIS Installer Script for Bear
-; Generates Windows installer with fixed installation path and PATH modification
+; Final, stable version (CI-friendly, no custom string hacks)
+
+;--------------------------------
+; App metadata
 
 !define APP_NAME "Bear"
-; APP_VERSION is passed via command line: /DAPP_VERSION=x.x.x
 !ifndef APP_VERSION
-  !define APP_VERSION "0.0.0"  ; Fallback version if not specified
+  !define APP_VERSION "0.0.0"
 !endif
 !define PUBLISHER "Bear Development Team"
 !define INSTALL_DIR "C:\Program Files\Bear"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 !define BASE_DIR "..\..\Bear"
+
+!ifndef TARGET_DIR
+  !define TARGET_DIR "target\release"
+!endif
 
 ;--------------------------------
 ; Includes
@@ -18,24 +24,23 @@
 !include "x64.nsh"
 !include "WinMessages.nsh"
 !include "FileFunc.nsh"
+!include "EnvVarUpdate.nsh"
+
 !insertmacro GetSize
 
 ;--------------------------------
-; General Configuration
+; General configuration
 
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "bear-${APP_VERSION}-windows-installer.exe"
 InstallDir "${INSTALL_DIR}"
 InstallDirRegKey HKLM "Software\${APP_NAME}" "InstallDir"
 
-; Request administrator privileges
 RequestExecutionLevel admin
-
-; Compression
 SetCompressor /SOLID lzma
 
 ;--------------------------------
-; Interface Settings
+; UI configuration
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install-blue.ico"
@@ -49,71 +54,62 @@ SetCompressor /SOLID lzma
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${BASE_DIR}\LICENSE.txt"
+
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirectoryPre
 !insertmacro MUI_PAGE_DIRECTORY
+
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
-;--------------------------------
-; Languages
-
 !insertmacro MUI_LANGUAGE "English"
 
 ;--------------------------------
-; Custom Functions
+; Lock install directory (fixed path)
 
-; Disable directory modification (fixed path requirement)
 Function DirectoryPre
-    ; Lock the installation directory - user cannot change it
     FindWindow $0 "#32770" "" $HWNDPARENT
-    GetDlgItem $1 $0 1019
-    EnableWindow $1 0  ; Disable the browse button
-    GetDlgItem $1 $0 1001
-    EnableWindow $1 0  ; Disable the directory text field
+    GetDlgItem $1 $0 1019 ; Browse button
+    EnableWindow $1 0
+    GetDlgItem $1 $0 1001 ; Path edit box
+    EnableWindow $1 0
 FunctionEnd
 
-!ifndef TARGET_DIR
-  !define TARGET_DIR "target\release"
-!endif
-
 ;--------------------------------
-; Installer Sections
+; Installer section
 
 Section "Bear Core Files" SecCore
-    SectionIn RO  ; Required section, cannot be unselected
+    SectionIn RO
 
     SetOutPath "$INSTDIR"
 
-    ; Install executables
+    ; Executables
     File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
 
-    ; Install wrapper if it exists
     IfFileExists "${BASE_DIR}\${TARGET_DIR}\wrapper.exe" 0 +2
     File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
 
-    ; Install library files if they exist
+    ; DLLs
     IfFileExists "${BASE_DIR}\${TARGET_DIR}\*.dll" 0 +2
     File "${BASE_DIR}\${TARGET_DIR}\*.dll"
 
-    ; Install documentation
+    ; Docs
     IfFileExists "${BASE_DIR}\README.md" 0 +2
     File "${BASE_DIR}\README.md"
 
-    ; Install license file (LICENSE.txt is prepared by the build script)
     IfFileExists "${BASE_DIR}\LICENSE.txt" 0 +2
     File /oname=LICENSE.txt "${BASE_DIR}\LICENSE.txt"
 
-    ; Write installation directory to registry
+    ; Registry (install info)
     WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
     WriteRegStr HKLM "Software\${APP_NAME}" "Version" "${APP_VERSION}"
 
-    ; Create uninstaller
+    ; Uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-    ; Add to Add/Remove Programs
+    ; Add/Remove Programs
     WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
     WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
     WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "${PUBLISHER}"
@@ -123,25 +119,25 @@ Section "Bear Core Files" SecCore
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoModify" 1
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
 
-    ; Estimate size (in KB)
+    ; Estimated size (KB)
     ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
     IntFmt $0 "0x%08X" $0
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "EstimatedSize" "$0"
 
     ; Add to system PATH
-    Call AddToPath
+    ${EnvVarUpdate} $0 "PATH" "A" "HKLM" "$INSTDIR"
 
 SectionEnd
 
 ;--------------------------------
-; Uninstaller Section
+; Uninstaller
 
 Section "Uninstall"
 
     ; Remove from PATH
-    Call un.RemoveFromPath
+    ${EnvVarUpdate} $0 "PATH" "R" "HKLM" "$INSTDIR"
 
-    ; Remove files
+    ; Files
     Delete "$INSTDIR\bear.exe"
     Delete "$INSTDIR\wrapper.exe"
     Delete "$INSTDIR\*.dll"
@@ -149,120 +145,11 @@ Section "Uninstall"
     Delete "$INSTDIR\LICENSE.txt"
     Delete "$INSTDIR\Uninstall.exe"
 
-    ; Remove directories
+    ; Directory
     RMDir "$INSTDIR"
 
-    ; Remove registry keys
+    ; Registry
     DeleteRegKey HKLM "${UNINSTALL_KEY}"
     DeleteRegKey HKLM "Software\${APP_NAME}"
 
 SectionEnd
-
-;--------------------------------
-; PATH Modification Functions
-
-Function AddToPath
-    ReadRegStr $0 HKLM \
-      "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
-      "PATH"
-
-    ; Check if already in PATH
-    ${StrStr} $1 $0 "$INSTDIR"
-    StrCmp $1 "" +2
-        Goto AlreadyInPath
-
-    ; Add to PATH
-    StrCpy $0 "$0;$INSTDIR"
-    WriteRegExpandStr HKLM \
-      "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
-      "PATH" $0
-
-    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 \
-      "STR:Environment" /TIMEOUT=5000
-
-    DetailPrint "Added $INSTDIR to system PATH"
-    Goto Done
-
-AlreadyInPath:
-    DetailPrint "$INSTDIR already in PATH"
-
-Done:
-FunctionEnd
-
-Function un.RemoveFromPath
-    ; Read current system PATH
-    ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH"
-
-    ; Remove our directory from PATH (try all variations)
-    Push "$0"
-    Push "$INSTDIR;"
-    Push ""
-    Call un.StrRep
-    Pop $1
-
-    Push "$1"
-    Push ";$INSTDIR"
-    Push ""
-    Call un.StrRep
-    Pop $0
-
-    Push "$0"
-    Push "$INSTDIR"
-    Push ""
-    Call un.StrRep
-    Pop $1
-
-    ; Write updated PATH
-    WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "PATH" $1
-
-    ; Broadcast environment change
-    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-
-    DetailPrint "Removed $INSTDIR from system PATH"
-FunctionEnd
-
-Function un.StrRep
-  Exch $R4
-  Exch 1
-  Exch $R5
-  Exch 2
-  Exch $R1
-  Push $R2
-  Push $R3
-  Push $R6
-  Push $R7
-  Push $R8
-  Push $R9
-
-  StrCpy $R2 -1
-  StrLen $R3 $R5
-  StrLen $R7 $R1
-  StrLen $R8 $R4
-
-  loop:
-    IntOp $R2 $R2 + 1
-    StrCpy $R6 $R1 $R3 $R2
-    StrCmp $R6 "" done
-    StrCmp $R6 $R5 found loop
-
-  found:
-    StrCpy $R6 $R1 $R2
-    IntOp $R9 $R2 + $R3
-    StrCpy $R7 $R1 "" $R9
-    StrCpy $R1 $R6$R4$R7
-    StrLen $R7 $R1
-    IntOp $R2 $R2 + $R8
-    IntOp $R2 $R2 - 1
-    Goto loop
-
-  done:
-    Pop $R9
-    Pop $R8
-    Pop $R7
-    Pop $R6
-    Pop $R3
-    Pop $R2
-    Pop $R5
-    Pop $R4
-    Exch $R1
-FunctionEnd
