@@ -55,14 +55,6 @@ Automated build system for Bear with platform-specific configurations:
 
 ## 🚀 Build Process
 
-### Automated Builds (GitHub Actions)
-
-The repository automatically:
-1. Checks for new Bear releases every 30 minutes
-2. Builds all platform targets when a new release is detected
-3. Creates platform-specific installers
-4. Publishes to GitHub Releases
-
 ### Supported Build Targets
 
 **Linux (8 targets)**:
