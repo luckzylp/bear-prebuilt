@@ -60,15 +60,19 @@ mkdir -p "$DIST_DIR"
 
 echo "✓ Created build directory"
 
-# Create directory structure
-mkdir -p "$PKG_DIR/usr/lib/libexec/bear"
+# Create directory structure per Bear's official install.md guide
+# Default paths: /usr/local/libexec/bear for wrapper, /usr/local/libexec/bear/$LIB for preload
+mkdir -p "$PKG_DIR/usr/local/bin"
+mkdir -p "$PKG_DIR/usr/local/libexec/bear"
+mkdir -p "$PKG_DIR/usr/local/man/man1"
 mkdir -p "$PKG_DIR/DEBIAN"
 
 # For x64 with multilib support, create architecture-specific directories
+# Debian uses: lib/x86_64-linux-gnu and lib/i386-linux-gnu per install.md
 if [ "$MULTILIB_SUPPORT" = true ]; then
-	mkdir -p "$PKG_DIR/usr/lib/libexec/bear/x86_64-linux-gnu"
-	mkdir -p "$PKG_DIR/usr/lib/libexec/bear/i386-linux-gnu"
-	echo "✓ Created multilib directory structure (x86_64 + i386)"
+	mkdir -p "$PKG_DIR/usr/local/libexec/bear/lib/x86_64-linux-gnu"
+	mkdir -p "$PKG_DIR/usr/local/libexec/bear/lib/i386-linux-gnu"
+	echo "✓ Created multilib directory structure (lib/x86_64-linux-gnu + lib/i386-linux-gnu)"
 fi
 
 echo "✓ Created package directory structure"
@@ -78,10 +82,35 @@ echo "✓ Created package directory structure"
 ACTUAL_TARGET="${TARGET_TRIPLE%.2.17}"
 TARGET_DIR="$BEAR_DIR/target/$ACTUAL_TARGET/release"
 
-# Copy main binaries
+# Determine the correct lib directory for this architecture per install.md
+# For Debian: lib/x86_64-linux-gnu, lib/aarch64-linux-gnu, etc.
+case "$TARGET_TRIPLE" in
+x86_64* | *x86-64*)
+	INSTALL_LIBDIR="lib/x86_64-linux-gnu"
+	;;
+aarch64* | *arm64*)
+	INSTALL_LIBDIR="lib/aarch64-linux-gnu"
+	;;
+armv7* | *armhf*)
+	INSTALL_LIBDIR="lib/arm-linux-gnueabihf"
+	;;
+i686* | *i386*)
+	INSTALL_LIBDIR="lib/i386-linux-gnu"
+	;;
+*)
+	# Default fallback
+	INSTALL_LIBDIR="lib/x86_64-linux-gnu"
+	;;
+esac
+
+echo "Using INSTALL_LIBDIR: $INSTALL_LIBDIR"
+
+# Copy main binaries per install.md
+# bear -> /usr/local/bin/
+# wrapper -> /usr/local/libexec/bear/
 if [ -f "$TARGET_DIR/bear" ]; then
-	cp "$TARGET_DIR/bear" "$PKG_DIR/usr/lib/libexec/bear/"
-	echo "✓ Copied bear binary ($ACTUAL_TARGET)"
+	cp "$TARGET_DIR/bear" "$PKG_DIR/usr/local/bin/"
+	echo "✓ Copied bear binary to /usr/local/bin/ ($ACTUAL_TARGET)"
 else
 	echo "Error: bear binary not found at $TARGET_DIR/bear"
 	exit 1
@@ -89,14 +118,16 @@ fi
 
 # Copy wrapper if exists
 if [ -f "$TARGET_DIR/wrapper" ]; then
-	cp "$TARGET_DIR/wrapper" "$PKG_DIR/usr/lib/libexec/bear/"
-	echo "✓ Copied wrapper binary"
+	cp "$TARGET_DIR/wrapper" "$PKG_DIR/usr/local/libexec/bear/"
+	echo "✓ Copied wrapper binary to /usr/local/libexec/bear/"
 fi
 
-# Copy shared libraries
+# Copy shared libraries (libexec.so) per install.md
+# Path: /usr/local/libexec/bear/$INSTALL_LIBDIR/
 if compgen -G "$TARGET_DIR/*.so" >/dev/null; then
-	cp "$TARGET_DIR"/*.so "$PKG_DIR/usr/lib/libexec/bear/x86_64-linux-gnu/" 2>/dev/null || true
-	echo "✓ Copied shared libraries"
+	mkdir -p "$PKG_DIR/usr/local/libexec/bear/$INSTALL_LIBDIR"
+	cp "$TARGET_DIR"/*.so "$PKG_DIR/usr/local/libexec/bear/$INSTALL_LIBDIR/" 2>/dev/null || true
+	echo "✓ Copied shared libraries to /usr/local/libexec/bear/$INSTALL_LIBDIR/"
 fi
 
 # For x64 multilib: build and copy i686 (32-bit) preload libraries
@@ -125,8 +156,8 @@ if [ "$MULTILIB_SUPPORT" = true ]; then
 		# Copy i686 libraries if build succeeded
 		if [ -d "target/i686-unknown-linux-gnu/release" ]; then
 			if compgen -G "target/i686-unknown-linux-gnu/release/*.so" >/dev/null; then
-				cp target/i686-unknown-linux-gnu/release/*.so "$PKG_DIR/usr/lib/libexec/bear/i386-linux-gnu/" 2>/dev/null || true
-				echo "✓ Copied i686 (32-bit) preload libraries"
+				cp target/i686-unknown-linux-gnu/release/*.so "$PKG_DIR/usr/local/libexec/bear/lib/i386-linux-gnu/" 2>/dev/null || true
+				echo "✓ Copied i686 (32-bit) preload libraries to /usr/local/libexec/bear/lib/i386-linux-gnu/"
 			fi
 		fi
 	else
@@ -139,9 +170,9 @@ fi
 # Copy architecture-specific library directories (if they exist from other builds)
 for libdir in x86_64-linux-gnu aarch64-linux-gnu arm-linux-gnueabihf i386-linux-gnu; do
 	if [ -d "$BEAR_DIR/target/release/$libdir" ] && compgen -G "$BEAR_DIR/target/release/$libdir/*.so" >/dev/null 2>&1; then
-		mkdir -p "$PKG_DIR/usr/lib/libexec/bear/$libdir"
-		cp "$BEAR_DIR/target/release/$libdir"/*.so "$PKG_DIR/usr/lib/libexec/bear/$libdir/" 2>/dev/null || true
-		echo "✓ Copied libraries for $libdir"
+		mkdir -p "$PKG_DIR/usr/local/libexec/bear/lib/$libdir"
+		cp "$BEAR_DIR/target/release/$libdir"/*.so "$PKG_DIR/usr/local/libexec/bear/lib/$libdir/" 2>/dev/null || true
+		echo "✓ Copied libraries for lib/$libdir"
 	fi
 done
 
@@ -158,25 +189,26 @@ if [ -f "$BEAR_DIR/LICENSE" ]; then
 	echo "✓ Copied LICENSE"
 fi
 
-# Copy man pages from Bear repository
+# Copy man pages from Bear repository per install.md
+# install.md: sudo install -m 644 man/bear.1 /usr/local/man/man1/
 if [ -d "$BEAR_DIR/man" ]; then
 	echo ""
-	echo "Copying man pages..."
-	mkdir -p "$PKG_DIR/usr/share/man/man1"
+	echo "Copying man pages to /usr/local/man/man1..."
+	mkdir -p "$PKG_DIR/usr/local/man/man1"
 
 	# Copy all man pages from Bear/man directory
 	MAN_COUNT=0
 	for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
 		if [ -f "$manfile" ]; then
-			cp "$manfile" "$PKG_DIR/usr/share/man/man1/"
+			cp "$manfile" "$PKG_DIR/usr/local/man/man1/"
 			MAN_COUNT=$((MAN_COUNT + 1))
 		fi
 	done
 
 	if [ $MAN_COUNT -gt 0 ]; then
 		# Compress man pages
-		gzip -9 "$PKG_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
-		echo "✓ Copied and compressed $MAN_COUNT man page(s)"
+		gzip -9 "$PKG_DIR/usr/local/man/man1"/*.1 2>/dev/null || true
+		echo "✓ Copied and compressed $MAN_COUNT man page(s) to /usr/local/man/man1/"
 	else
 		echo "Warning: No man pages found in $BEAR_DIR/man"
 	fi
@@ -219,10 +251,11 @@ else
 	echo "Warning: prerm script not found at $DEBIAN_DIR/prerm"
 fi
 
-# Set permissions
-find "$PKG_DIR/usr/lib/libexec/bear" -type f -name "bear" -exec chmod 755 {} \;
-find "$PKG_DIR/usr/lib/libexec/bear" -type f -name "wrapper" -exec chmod 755 {} \;
-find "$PKG_DIR/usr/lib/libexec/bear" -type f -name "*.so" -exec chmod 644 {} \;
+# Set permissions per install.md
+# bear and wrapper: chmod 755, libexec.so: chmod 644
+find "$PKG_DIR/usr/local" -type f -name "bear" -exec chmod 755 {} \;
+find "$PKG_DIR/usr/local/libexec/bear" -type f -name "wrapper" -exec chmod 755 {} \;
+find "$PKG_DIR/usr/local/libexec/bear" -type f -name "*.so" -exec chmod 644 {} \;
 
 echo "✓ Set file permissions"
 
@@ -230,7 +263,7 @@ echo "✓ Set file permissions"
 echo ""
 echo "Package contents:"
 echo "----------------"
-find "$PKG_DIR/usr/lib/libexec/bear" -type f | sed "s|$PKG_DIR||" | sort
+find "$PKG_DIR/usr/local" -type f | sed "s|$PKG_DIR||" | sort
 
 # Build the package
 echo ""
