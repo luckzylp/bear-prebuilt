@@ -7,6 +7,24 @@ set -e
 # Bear is installed to /usr/bin/bear (via dpkg)
 # No symlink needed as /usr/bin is already in PATH
 
+# Ensure correct ownership and permissions for all installed files
+if [ -d "/usr/bin/bear" ] || [ -f "/usr/bin/bear" ]; then
+    find /usr/bin/bear -type f -exec chown root:root {} \; 2>/dev/null || true
+    find /usr/bin/bear -type f -exec chmod 755 {} \; 2>/dev/null || true
+fi
+
+if [ -d "/usr/lib" ]; then
+    # Set ownership for /usr/lib/*/bear directories
+    for dir in /usr/lib/*/bear; do
+        if [ -d "$dir" ]; then
+            chown -R root:root "$dir" 2>/dev/null || true
+            find "$dir" -type f -name "bear" -exec chmod 755 {} \; 2>/dev/null || true
+            find "$dir" -type f -name "wrapper" -exec chmod 755 {} \; 2>/dev/null || true
+            find "$dir" -type f -name "*.so" -exec chmod 755 {} \; 2>/dev/null || true
+        fi
+    done
+fi
+
 # Update man database if mandb is available
 if command -v mandb >/dev/null 2>&1; then
     mandb -q 2>/dev/null || true

@@ -106,7 +106,7 @@ ACTUAL_TARGET="${TARGET_TRIPLE%.2.17}"
 TARGET_DIR="$BEAR_DIR/target/$ACTUAL_TARGET/release"
 
 # Copy main binaries per install.md
-# bear -> /usr/local/bin/
+# bear -> /usr/bin/
 # wrapper -> /usr/${INSTALL_LIBDIR}/bear/
 if [ -f "$TARGET_DIR/bear" ]; then
 	cp "$TARGET_DIR/bear" "$PKG_DIR/usr/bin/"
@@ -125,9 +125,9 @@ fi
 # Copy shared libraries (libexec.so) per install.md
 # Path: /usr/${INSTALL_LIBDIR}/bear/$INSTALL_LIBDIR/
 if compgen -G "$TARGET_DIR/*.so" >/dev/null; then
-	mkdir -p "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear/$INSTALL_LIBDIR"
-	cp "$TARGET_DIR"/*.so "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear/$INSTALL_LIBDIR/" 2>/dev/null || true
-	echo "✓ Copied shared libraries to /usr/${INSTALL_LIBDIR}/bear/$INSTALL_LIBDIR/"
+	mkdir -p "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear/"
+	cp "$TARGET_DIR"/*.so "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear/" 2>/dev/null || true
+	echo "✓ Copied shared libraries to /usr/${INSTALL_LIBDIR}/bear/"
 fi
 
 # For x64 multilib: copy i686 (32-bit) preload libraries
@@ -200,25 +200,25 @@ if [ -f "$BEAR_DIR/LICENSE" ]; then
 fi
 
 # Copy man pages from Bear repository per install.md
-# install.md: sudo install -m 644 man/bear.1 /usr/local/man/man1/
+# install.md: sudo install -m 644 man/bear.1 /usr/share/man/man1/
 if [ -d "$BEAR_DIR/man" ]; then
 	echo ""
-	echo "Copying man pages to /usr/local/man/man1..."
-	mkdir -p "$PKG_DIR/usr/local/man/man1"
+	echo "Copying man pages to /usr/share/man/man1..."
+	mkdir -p "$PKG_DIR/usr/share/man/man1"
 
 	# Copy all man pages from Bear/man directory
 	MAN_COUNT=0
 	for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
 		if [ -f "$manfile" ]; then
-			cp "$manfile" "$PKG_DIR/usr/local/man/man1/"
+			cp "$manfile" "$PKG_DIR/usr/share/man/man1/"
 			MAN_COUNT=$((MAN_COUNT + 1))
 		fi
 	done
 
 	if [ $MAN_COUNT -gt 0 ]; then
 		# Compress man pages
-		gzip -9 "$PKG_DIR/usr/local/man/man1"/*.1 2>/dev/null || true
-		echo "✓ Copied and compressed $MAN_COUNT man page(s) to /usr/local/man/man1/"
+		gzip -9 "$PKG_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
+		echo "✓ Copied and compressed $MAN_COUNT man page(s) to /usr/share/man/man1/"
 	else
 		echo "Warning: No man pages found in $BEAR_DIR/man"
 	fi
@@ -260,20 +260,6 @@ if [ -f "$DEBIAN_DIR/prerm" ]; then
 else
 	echo "Warning: prerm script not found at $DEBIAN_DIR/prerm"
 fi
-
-# Set permissions per install.md
-# bear and wrapper: chmod 755, libexec.so: chmod 644
-find "$PKG_DIR/usr/local" -type f -name "bear" -exec chmod 755 {} \;
-find "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear" -type f -name "wrapper" -exec chmod 755 {} \;
-find "$PKG_DIR/usr/${INSTALL_LIBDIR}/bear" -type f -name "*.so" -exec chmod 644 {} \;
-
-echo "✓ Set file permissions"
-
-# Display package contents
-echo ""
-echo "Package contents:"
-echo "----------------"
-find "$PKG_DIR/usr/local" "$PKG_DIR/usr/${INSTALL_LIBDIR}" -type f 2>/dev/null | sed "s|$PKG_DIR||" | sort
 
 # Build the package
 echo ""
