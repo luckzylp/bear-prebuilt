@@ -4,11 +4,8 @@ set -e
 # Post-installation script for Bear
 # This script runs after the package is installed
 
-# Create symlink to make bear accessible from PATH
-if [ ! -e /usr/local/bin/bear ]; then
-    mkdir -p /usr/local/bin
-    ln -s /usr/lib/libexec/bear/bear /usr/local/bin/bear
-fi
+# Bear is installed to /usr/bin/bear (via dpkg)
+# No symlink needed as /usr/bin is already in PATH
 
 # Update man database if mandb is available
 if command -v mandb >/dev/null 2>&1; then

@@ -53,17 +53,17 @@ jobs:
           - aarch64-pc-windows-msvc
 
           # macOS
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+          # - x86_64-apple-darwin
+          # - aarch64-apple-darwin
 
     steps:
       - name: Checkout Bear prebuilt repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: bear-prebuilt
 
       - name: Checkout Bear
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.BEAR_REPO }}
           ref: ${{ needs.get-version.outputs.tag }}
@@ -77,9 +77,19 @@ jobs:
           targets: ${{ contains(matrix.target, 'windows') && 'x86_64-pc-windows-msvc,aarch64-pc-windows-msvc' || '' }}
 
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
+        run: |
+          ZIG_VERSION=0.15.2
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64) ZIG_ARCH=x86_64 ;;
+            aarch64) ZIG_ARCH=aarch64 ;;
+            armv7) ZIG_ARCH=armv7l ;;
+            i686|i386) ZIG_ARCH=i386 ;;
+            *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
+          esac
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz
+          echo "$PWD/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}" >> $GITHUB_PATH
 
       - name: Install cargo-zigbuild
         if: "!contains(matrix.target, 'windows')"
@@ -91,6 +101,10 @@ jobs:
           TARGET="${{ matrix.target }}"
           TARGET="${TARGET%.2.17}"
           rustup target add "$TARGET"
+          # Add i686 target for multilib support when building x86_64
+          if [[ "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+            rustup target add i686-unknown-linux-gnu
+          fi
 
       - name: Add Rust target (Windows)
         if: contains(matrix.target, 'windows')
@@ -116,6 +130,10 @@ jobs:
         working-directory: bear-prebuilt/Bear
         run: |
           cargo zigbuild --release --target ${{ matrix.target }}
+          # Build i686 for multilib support (x86 on x64)
+          if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]] || [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu.2.17" ]]; then
+            cargo zigbuild --release --target i686-unknown-linux-gnu
+          fi
 
       - name: Build Bear (MSVC)
         if: contains(matrix.target, 'windows')
@@ -147,7 +165,7 @@ jobs:
         run: bash scripts/create-macos-dmg.sh "${{ needs.get-version.outputs.tag }}" "${{ matrix.target }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
           path: bear-prebuilt/dist/*
@@ -157,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: dist
 
@@ -171,7 +189,7 @@ jobs:
 
             ## Installation Paths
             * **Windows**: `C:\Program Files\Bear\` (via .exe installer)
-            * **Linux**: `/usr/lib/libexec/bear/` (via .deb package)
+            * **Linux**: `/usr/$LIB/bear/` (via .deb package)
             * **macOS**: `/usr/lib/libexec/bear/` (via .dmg installer)
 
             ## Features
