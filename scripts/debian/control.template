@@ -10,8 +10,12 @@ Description: Tool that generates a compilation database for clang tooling
  in a JSON format that can be used by clang-based tools like clang-tidy,
  clangd, and other static analysis tools.
  .
- This package installs Bear to /usr/lib/libexec/bear/.
+ This package installs:
+  - bear binary: /usr/bin/bear
+  - wrapper and libs: /usr/${LIB}/bear/ (e.g., /usr/lib/x86_64-linux-gnu/bear/)
+  - man pages: /usr/local/man/man1/
  .
- For x86_64 packages: Includes multilib support for intercepting both
- 64-bit and 32-bit compiler invocations via $LIB path expansion.
+ For x86_64 packages: Includes multilib support with i386 libraries
+ in /usr/lib/i386-linux-gnu/bear/ for intercepting both 64-bit and
+ 32-bit compiler invocations.
 Homepage: https://github.com/rizsotto/Bear
