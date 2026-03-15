@@ -20,21 +20,24 @@ cp "${BUILD_RS_PATH}" "${BUILD_RS_PATH}.bak"
 echo "✓ Backed up original build.rs"
 
 # Apply Linux-specific patches
-# Change 1: const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
-# To:       const DEFAULT_WRAPPER_PATH: &str = "/usr/$LIB/bear";
-#
-# Change 2: const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
+# Change 1: const DEFAULT_PRELOAD_PATH: &str = "/usr/local/libexec/bear/$LIB";
 # To:       const DEFAULT_PRELOAD_PATH: &str = "/usr/$LIB/bear";
+#
+# Change 2: const DEFAULT_WRAPPER_PATH: &str = "/usr/local/libexec/bear";
+# To:       const DEFAULT_WRAPPER_PATH: &str = "/usr/$LIB/bear";
 
 # Use sed with backup extension (works on both Linux and macOS)
 if sed --version &>/dev/null; then
     # GNU sed (Linux)
+    # First replace the longer pattern, then the shorter one
     sed -i \
+      -e 's|/usr/local/libexec/bear/\$LIB|/usr/$LIB/bear|g' \
       -e 's|/usr/local/libexec/bear|/usr/$LIB/bear|g' \
       "${BUILD_RS_PATH}"
 else
     # BSD sed (macOS)
     sed -i '' \
+      -e 's|/usr/local/libexec/bear/\$LIB|/usr/$LIB/bear|g' \
       -e 's|/usr/local/libexec/bear|/usr/$LIB/bear|g' \
       "${BUILD_RS_PATH}"
 fi
