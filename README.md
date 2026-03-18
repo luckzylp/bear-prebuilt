@@ -10,49 +10,6 @@ Automated build system for Bear with platform-specific configurations:
 - **Linux**: Debian packages with multilib support (x64 includes both 64-bit and 32-bit libraries)
 - **macOS**: Native .pkg installer (wrapper mode)
 
-## 📦 Installation Paths
-
-| Platform | Installation Path | Mode | Package Format |
-|----------|------------------|------|----------------|
-| **Windows** | `C:\Program Files\Bear\` | Standard | `.exe` installer |
-| **Linux** | `/usr/lib/libexec/bear/` | Standard | `.deb` package |
-| **macOS** | `/usr/lib/libexec/bear/` | **Wrapper** | `.dmg` disk image |
-
-## 🔧 Platform-Specific Configurations
-
-### Windows (MSVC)
-- **Installation Path**: `C:\Program Files\Bear\` (fixed, cannot be modified)
-- **Build.rs Modification**: `DEFAULT_WRAPPER_PATH = "C:/Program Files/Bear"`
-- **Installer Features**:
-  - NSIS-based installer
-  - Uninstaller included
-  - Registered in Windows Add/Remove Programs
-  - Requires administrator privileges
-
-### Linux (Ubuntu/Debian)
-- **Installation Path**: `/usr/lib/libexec/bear/`
-- **Build.rs Modifications**:
-  - `DEFAULT_WRAPPER_PATH = "/usr/lib/libexec/bear"`
-  - `DEFAULT_PRELOAD_PATH = "/usr/lib/libexec/bear/$LIB"`
-- **Multilib Support (x64 only)**:
-  - x86_64 libraries: `/usr/lib/libexec/bear/x86_64-linux-gnu/`
-  - i386 libraries: `/usr/lib/libexec/bear/i386-linux-gnu/`
-  - Supports intercepting both 64-bit and 32-bit compiler invocations
-- **Post-installation**: Creates symlink `/usr/bin/bear` → `/usr/lib/libexec/bear/bear`
-
-### macOS (Darwin) - Wrapper Mode
-- **Installation Path**: `/usr/lib/libexec/bear/`
-- **Mode**: Wrapper (default for macOS)
-- **Package Format**: DMG disk image
-- **Package Naming**: Includes `-wrapper` suffix (e.g., `bear-4.0.2-x86_64-apple-darwin-wrapper.dmg`)
-- **Build.rs Modifications**:
-  - `DEFAULT_WRAPPER_PATH = "/usr/lib/libexec/bear"`
-  - `DEFAULT_PRELOAD_PATH = "/usr/lib/libexec/bear/$LIB"`
-- **Installation Method**: 
-  1. Mount DMG by double-clicking
-  2. Run Bear.app installer (requires sudo password)
-  3. Automatic symbolic link creation in `/usr/local/bin/`
-
 ## 🚀 Build Process
 
 ### Supported Build Targets
