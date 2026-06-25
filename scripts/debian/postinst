@@ -1,31 +1,42 @@
 #!/bin/sh
+# postinst script for bear (v4+).
+#
+# The package installs:
+#   /usr/bin/bear                                          (shell script -> bear-driver)
+#   /usr/libexec/bear/bin/bear-driver                      (64-bit)
+#   /usr/libexec/bear/bin/bear-wrapper                     (64-bit)
+#   /usr/libexec/bear/lib/<multiarch>/libexec.so           (64-bit, e.g. x86_64-linux-gnu/)
+#
+# Multilib (amd64 only) adds:
+#   /usr/libexec/bear/lib/i386-linux-gnu/libexec.so        (32-bit preload)
+#
+# No 32-bit bear-driver, bear-wrapper, or /usr/bin/bear32 entry is
+# shipped — the 64-bit bear-driver is the single host-bits entry.
+# The 32-bit libexec.so is available for users who invoke 32-bit
+# tooling with a manual LD_PRELOAD pointing at it.
+#
+# This script only refreshes executable bits defensively and updates
+# the man database; file ownership and modes are baked in by dpkg-deb.
+
 set -e
 
-# Post-installation script for Bear
-# This script runs after the package is installed
+case "$1" in
+    configure)
+        # Host-bits tree.
+        for f in /usr/libexec/bear/bin/bear-driver \
+                 /usr/libexec/bear/bin/bear-wrapper; do
+            [ -f "$f" ] && chmod 0755 "$f"
+        done
+        [ -f /usr/libexec/bear/lib/libexec.so ] && chmod 0644 /usr/libexec/bear/lib/libexec.so
+        [ -f /usr/bin/bear ] && chmod 0755 /usr/bin/bear
 
-# Bear is installed to /usr/bin/bear (via dpkg)
-# No symlink needed as /usr/bin is already in PATH
+        # Multilib (32-bit preload payload, no extra binaries).
+        [ -f /usr/libexec/bear/lib/i386-linux-gnu/libexec.so ] && \
+            chmod 0644 /usr/libexec/bear/lib/i386-linux-gnu/libexec.so
+        ;;
+esac
 
-# Ensure correct ownership and permissions for all installed files
-if [ -d "/usr/bin/bear" ] || [ -f "/usr/bin/bear" ]; then
-    find /usr/bin/bear -type f -exec chown root:root {} \; 2>/dev/null || true
-    find /usr/bin/bear -type f -exec chmod 755 {} \; 2>/dev/null || true
-fi
-
-if [ -d "/usr/lib" ]; then
-    # Set ownership for /usr/lib/*/bear directories
-    for dir in /usr/lib/*/bear; do
-        if [ -d "$dir" ]; then
-            chown -R root:root "$dir" 2>/dev/null || true
-            find "$dir" -type f -name "bear" -exec chmod 755 {} \; 2>/dev/null || true
-            find "$dir" -type f -name "wrapper" -exec chmod 755 {} \; 2>/dev/null || true
-            find "$dir" -type f -name "*.so" -exec chmod 755 {} \; 2>/dev/null || true
-        fi
-    done
-fi
-
-# Update man database if mandb is available
+# Update man database if mandb is available.
 if command -v mandb >/dev/null 2>&1; then
     mandb -q 2>/dev/null || true
 fi

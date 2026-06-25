@@ -4,19 +4,27 @@ This repository contains scripts and GitHub Actions workflows to build platform-
 
 ## 🎯 Overview
 
-Automated build system for Bear with platform-specific configurations:
+Automated build system for Bear with platform-specific configurations, aligned
+with the installation layout described in Bear's upstream
+[`INSTALL.md`](https://github.com/rizsotto/Bear/blob/main/INSTALL.md).
 
 - **Windows**: NSIS installer with fixed installation path
-- **Linux**: Debian packages with multilib support (x64 includes both 64-bit and 32-bit libraries)
+- **Linux**: Debian packages for amd64 (with multilib), arm64, armhf, and i386
 - **macOS**: Native .pkg installer (wrapper mode)
+
+Bear v3+ is implemented in Rust and configures its runtime wrapper/preload
+lookup directory at **build time** through the `INTERCEPT_LIBDIR` env var — see
+`bear/build.rs`. The `patch-build-rs-*.sh` scripts in this repo predated that
+rewrite and are no longer invoked by CI; runtime paths are baked in via
+`INTERCEPT_LIBDIR=$LIB` on glibc Linux and `INTERCEPT_LIBDIR=lib` elsewhere.
 
 ## 🚀 Build Process
 
 ### Supported Build Targets
 
 **Linux (8 targets)**:
-- `x86_64-unknown-linux-gnu` (glibc high) - **with multilib**
-- `x86_64-unknown-linux-gnu.2.17` (glibc 2.17) - **with multilib**
+- `x86_64-unknown-linux-gnu` (glibc high) — **with multilib**
+- `x86_64-unknown-linux-gnu.2.17` (glibc 2.17) — **with multilib**
 - `aarch64-unknown-linux-gnu` (glibc high)
 - `aarch64-unknown-linux-gnu.2.17` (glibc 2.17)
 - `armv7-unknown-linux-gnueabihf` (glibc high)
@@ -31,6 +39,13 @@ Automated build system for Bear with platform-specific configurations:
 **macOS (2 targets - wrapper mode)**:
 - `x86_64-apple-darwin` → `bear-<version>-x86_64-apple-darwin-wrapper.dmg`
 - `aarch64-apple-darwin` → `bear-<version>-aarch64-apple-darwin-wrapper.dmg`
+
+**Default `INTERCEPT_LIBDIR` per target** (matches Bear's `INSTALL.md`):
+- x86_64 Linux: `lib/x86_64-linux-gnu`
+- aarch64 Linux: `lib/aarch64-linux-gnu`
+- armv7 Linux: `lib/arm-linux-gnueabihf`
+- i686 Linux: `lib/i386-linux-gnu`
+- macOS / Windows: `lib`
 
 ## 📋 Manual Build Instructions
 
@@ -55,27 +70,22 @@ cd bear-prebuilt
 git submodule update --init --recursive
 ```
 
-2. **Apply platform patches**:
-```bash
-# Windows
-bash scripts/patch-build-rs-windows.sh
-
-# Linux
-bash scripts/patch-build-rs-linux.sh
-
-# macOS
-bash scripts/patch-build-rs-macos.sh
-```
-
-3. **Build Bear**:
+2. **Build Bear** (set `INTERCEPT_LIBDIR` per target, as described in
+   Bear's `INSTALL.md`):
 ```bash
 cd Bear
 
-# Linux/macOS (with zigbuild)
-cargo zigbuild --release --target <target-triple>
+# glibc Linux — defer the library directory to the dynamic linker
+INTERCEPT_LIBDIR='$LIB' cargo zigbuild --release --target <target-triple>
 
-# Windows (native)
-cargo build --release --target <target-triple>
+# macOS / Windows / non-glibc — concrete directory
+INTERCEPT_LIBDIR=lib cargo zigbuild --release --target <target-triple>   # macOS
+cargo build --release --target <target-triple>                            # Windows (MSVC)
+```
+
+3. **(Optional) Generate shell completions** (Bear's `INSTALL.md` step 3):
+```bash
+target/release/generate-completions target/<target-triple>/release/completions
 ```
 
 4. **Create installer**:
@@ -85,8 +95,8 @@ cd ..
 # Windows
 pwsh scripts/create-windows-installer.ps1 -Version "4.0.2" -TargetTriple "x86_64-pc-windows-msvc"
 
-# Linux (with multilib for x64)
-bash scripts/create-deb-package.sh "4.0.2" "x86_64-unknown-linux-gnu"
+# Linux (Debian)
+bash scripts/create-deb-package.sh "4.1.4" "x86_64-unknown-linux-gnu"
 
 # macOS (wrapper mode)
 bash scripts/create-macos-dmg.sh "4.0.2" "x86_64-apple-darwin"
@@ -147,14 +157,14 @@ sudo rm /usr/local/bin/bear
 bear-prebuilt/
 ├── .github/
 │   └── workflows/
-│       └── bear-auto-build.yml       # Main CI/CD workflow
+│       └── bear-build.yml            # Main CI/CD workflow
 ├── Bear/                             # Bear submodule
 ├── scripts/
-│   ├── patch-build-rs-windows.sh     # Windows build.rs patcher
-│   ├── patch-build-rs-linux.sh       # Linux build.rs patcher
-│   ├── patch-build-rs-macos.sh       # macOS build.rs patcher
+│   ├── patch-build-rs-windows.sh     # Legacy: no-op since Bear v3 (Rust rewrite)
+│   ├── patch-build-rs-linux.sh       # Legacy: no-op since Bear v3 (Rust rewrite)
+│   ├── patch-build-rs-macos.sh       # Legacy: no-op since Bear v3 (Rust rewrite)
 │   ├── create-windows-installer.ps1  # Windows NSIS installer builder
-│   ├── create-deb-package.sh         # Debian package builder (with multilib)
+│   ├── create-deb-package.sh         # Debian package builder (PREFIX=/usr, INTERCEPT_LIBDIR=lib/<multiarch>)
 │   ├── create-macos-dmg.sh           # macOS .dmg builder (wrapper mode)
 │   ├── nsis/
 │   │   └── bear-installer.nsi        # NSIS installer script
@@ -167,6 +177,12 @@ bear-prebuilt/
 └── README.md                         # This file
 ```
 
+> The `patch-build-rs-*.sh` scripts are kept for historical reference. The
+> upstream `Bear/bear/build.rs` no longer contains `DEFAULT_WRAPPER_PATH` or
+> `DEFAULT_PRELOAD_PATH` constants — runtime lookup is configured through the
+> `INTERCEPT_LIBDIR` env var at build time. CI sets this variable instead of
+> running the patches.
+
 ## 🔍 Key Features
 
 ### ✅ Windows
@@ -174,11 +190,25 @@ bear-prebuilt/
 - Professional NSIS installer with uninstaller
 - Registered in Windows Add/Remove Programs
 
-### ✅ Linux (x64 with Multilib)
-- Supports both 64-bit and 32-bit builds simultaneously
-- Architecture-specific library directories using `$LIB` expansion
-- Automatic symbolic link creation in `/usr/bin/`
-- Full Debian package compliance
+### ✅ Linux
+- Layout follows `Bear/INSTALL.md` with the **Debian multiarch
+  `INTERCEPT_LIBDIR`** baked in at compile time. Each architecture's
+  `bear-driver` resolves `../$INTERCEPT_LIBDIR/libexec.so` to the
+  matching multiarch subdirectory:
+  - amd64: `/usr/libexec/bear/lib/x86_64-linux-gnu/libexec.so`
+  - arm64: `/usr/libexec/bear/lib/aarch64-linux-gnu/libexec.so`
+  - armhf: `/usr/libexec/bear/lib/arm-linux-gnueabihf/libexec.so`
+  - i386:  `/usr/libexec/bear/lib/i386-linux-gnu/libexec.so`
+- **Multilib (amd64 only)**: ships a 32-bit `libexec.so` alongside
+  the 64-bit one at `/usr/libexec/bear/lib/i386-linux-gnu/libexec.so`
+  for users who run 32-bit tooling and need to inject the preload
+  manually (e.g. `LD_PRELOAD=.../lib/i386-linux-gnu/libexec.so ...`).
+  No 32-bit `bear-driver`/`bear-wrapper`/`bear32` entry is shipped —
+  the 64-bit entry remains the single host-bits command. The `.deb`
+  Recommends `libc6-i386` and Suggests `gcc-multilib` so apt pulls
+  the 32-bit runtime when the user wants to use the preload.
+- Per-target .deb files for glibc high and glibc 2.17 across
+  amd64, arm64, armhf, and i386
 
 ### ✅ macOS (Wrapper Mode)
 - Native .dmg disk image format
@@ -188,10 +218,10 @@ bear-prebuilt/
 - Compatible with both Intel and Apple Silicon
 
 ### ✅ CI/CD Automation
-- Automatic detection of new Bear releases
-- Parallel builds for all 14 platform targets
+- Manual trigger (`workflow_dispatch`) on the latest upstream Bear release tag
+- Parallel builds for all 12 platform targets (8 Linux + 2 Windows + 2 macOS)
 - Automatic GitHub Release creation
-- Comprehensive build artifacts
+- Comprehensive build artifacts including shell completions
 
 ## 🛠️ Troubleshooting
 
@@ -200,11 +230,13 @@ bear-prebuilt/
 **Solution**: Run installer as Administrator
 
 ### Linux
-**Issue**: 32-bit builds not intercepted on x64  
-**Solution**: Ensure both x86_64 and i386 libraries are present in `/usr/lib/libexec/bear/`
-
 **Issue**: Missing dependencies  
 **Solution**: Run `sudo apt-get install -f` to fix dependencies
+
+**Issue**: `bear` not found after install  
+**Solution**: `/usr/bin/bear` is a generated shell script that execs
+`/usr/libexec/bear/bin/bear-driver`. Make sure both files are present
+and executable (`dpkg -L bear | grep bear`).
 
 ### macOS
 **Issue**: "bear" cannot be opened because the developer cannot be verified  
@@ -214,7 +246,7 @@ bear-prebuilt/
 **Solution**: Ensure you run with sudo: `sudo /Volumes/Bear\ <version>/Bear.app/Contents/MacOS/install.sh`
 
 **Issue**: Wrapper not found  
-**Solution**: Verify `/usr/lib/libexec/bear/wrapper` exists and is executable
+**Solution**: Verify `/usr/lib/libexec/bear/bear-wrapper` exists and is executable
 
 ## 📄 License
 

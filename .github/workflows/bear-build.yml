@@ -53,8 +53,8 @@ jobs:
           - aarch64-pc-windows-msvc
 
           # macOS
-          # - x86_64-apple-darwin
-          # - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
 
     steps:
       - name: Checkout Bear prebuilt repo
@@ -91,7 +91,8 @@ jobs:
           TARGET="${{ matrix.target }}"
           TARGET="${TARGET%.2.17}"
           rustup target add "$TARGET"
-          # Add i686 target for multilib support when building x86_64
+          # When building x86_64, also add i686 so the multilib step
+          # below can fold 32-bit artifacts into the same .deb.
           if [[ "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
             rustup target add i686-unknown-linux-gnu
           fi
@@ -100,36 +101,74 @@ jobs:
         if: contains(matrix.target, 'windows')
         run: pwsh -Command "'${{ matrix.target }}'.Replace('.2.17', '') | ForEach-Object { rustup target add $_ }"
 
-      - name: Apply platform-specific patches
-        working-directory: bear-prebuilt
-        shell: bash
-        run: |
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            echo "Applying Windows patches..."
-            bash scripts/patch-build-rs-windows.sh
-          elif [[ "${{ matrix.target }}" == *"darwin"* ]]; then
-            echo "Applying macOS patches..."
-            bash scripts/patch-build-rs-macos.sh
-          else
-            echo "Applying Linux patches..."
-            bash scripts/patch-build-rs-linux.sh
-          fi
-
+      # Bear v3+ (Rust) configures the runtime preload-library lookup
+      # directory through the INTERCEPT_LIBDIR env var at build time
+      # (see bear/build.rs and bear/src/installation.rs). The
+      # `patch-build-rs-*.sh` scripts in this repo predate the Rust
+      # rewrite and are no-ops; runtime paths are now compiled in.
+      #
+      # Note: we deliberately do NOT use the `$LIB` token from Bear's
+      # INSTALL.md. bear-driver resolves `INTERCEPT_LIBDIR` with a
+      # Rust PathBuf::join — `$LIB` is interpreted as a literal segment
+      # rather than expanded by the dynamic linker (ld.so only expands
+      # `$LIB` inside DT_RUNPATH-style search paths, not in argv
+      # strings). A concrete directory name is required.
       - name: Build Bear (zigbuild)
         if: "!contains(matrix.target, 'windows')"
         working-directory: bear-prebuilt/Bear
         run: |
-          cargo zigbuild --release --target ${{ matrix.target }}
-          # Build i686 for multilib support (x86 on x64)
-          if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]] || [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu.2.17" ]]; then
-            cargo zigbuild --release --target i686-unknown-linux-gnu
-          fi
+          # Cargo writes to target/<triple>/release/ by default.
+          #
+          # Set INTERCEPT_LIBDIR to the Debian multiarch subpath so
+          # that bear-driver resolves `../$INTERCEPT_LIBDIR/libexec.so`
+          # to the multiarch location at runtime. See Bear/INSTALL.md
+          # and bear/src/installation.rs. This must match the path the
+          # deb packager installs the .so to.
+          TARGET="${{ matrix.target }}"
+          TARGET="${TARGET%.2.17}"
+          case "$TARGET" in
+              x86_64-*linux-gnu*)   INTERCEPT_LIBDIR="lib/x86_64-linux-gnu" ;;
+              aarch64-*linux-gnu*)  INTERCEPT_LIBDIR="lib/aarch64-linux-gnu" ;;
+              armv7-*linux-gnueabihf*|arm-*linux-gnueabihf*)
+                                    INTERCEPT_LIBDIR="lib/arm-linux-gnueabihf" ;;
+              i686-*linux-gnu*)     INTERCEPT_LIBDIR="lib/i386-linux-gnu" ;;
+              *)                    INTERCEPT_LIBDIR="lib" ;;
+          esac
+          export INTERCEPT_LIBDIR
+          echo "Building $TARGET with INTERCEPT_LIBDIR=$INTERCEPT_LIBDIR"
+          cargo zigbuild --release --target "$TARGET"
+
+      # Multilib: when this is an x86_64 (or x86_64 .2.17) build, also
+      # produce a 32-bit i686 set of artifacts into target/i686-.../release/
+      # so the deb packager can fold them in under /usr/lib32/bear/. The
+      # i686 bear-driver is compiled with INTERCEPT_LIBDIR pointing at
+      # the i386 multiarch libdir, matching /usr/lib32/bear/lib/...
+      - name: Build Bear i686 (multilib)
+        if: >-
+          (matrix.target == 'x86_64-unknown-linux-gnu' ||
+           matrix.target == 'x86_64-unknown-linux-gnu.2.17')
+        working-directory: bear-prebuilt/Bear
+        run: |
+          export INTERCEPT_LIBDIR="lib/i386-linux-gnu"
+          cargo zigbuild --release --target i686-unknown-linux-gnu
 
       - name: Build Bear (MSVC)
         if: contains(matrix.target, 'windows')
         working-directory: bear-prebuilt/Bear
         run: |
           cargo build --release --target ${{ matrix.target }}
+
+      - name: Generate shell completions
+        if: "!contains(matrix.target, 'windows')"
+        working-directory: bear-prebuilt/Bear
+        run: |
+          # INSTALL.md step 3: generate shell completions for bash/zsh/fish/elvish.
+          T="${{ matrix.target }}"
+          T="${T%.2.17}"
+          BIN="target/$T/release/generate-completions"
+          if [ -x "$BIN" ]; then
+            "$BIN" "target/$T/release/completions" || true
+          fi
 
       - name: Install NSIS (Windows)
         if: contains(matrix.target, 'windows')
@@ -178,13 +217,29 @@ jobs:
             Automated prebuilt binaries and installers for Bear v${{ needs.get-version.outputs.tag }}
 
             ## Installation Paths
-            * **Windows**: `C:\Program Files\Bear\` (via .exe installer)
-            * **Linux**: `/usr/$LIB/bear/` (via .deb package)
+
+            These builds follow the layout described in Bear's official
+            [INSTALL.md](https://github.com/rizsotto/Bear/blob/main/INSTALL.md):
+
+            * **Linux** (Debian/Ubuntu): `/usr/bin/bear` (shell script)
+              and `/usr/libexec/bear/{bin,lib}/` (`bear-driver`,
+              `bear-wrapper`, `libexec.so`).
+            * **Windows**: `C:\Program Files\Bear\` (NSIS installer;
+              ships `bear-driver.exe`, `bear-wrapper.exe`, and a
+              generated `bear.cmd` shim).
+            * **macOS** (wrapper mode): `Bear.app/Contents/MacOS/install.sh`
+              copies the same `/usr/libexec/bear/{bin,lib}/` layout
+              into `/usr/libexec/bear/` and links `/usr/local/bin/bear`
+              to `bear-driver`.
+
+            The runtime lookup directory is compiled in at build time
+            via the `INTERCEPT_LIBDIR=lib` env var.
 
             ## Features
             * Built with cargo + zigbuild
-            * Linux: glibc high & glibc 2.17
-            * Linux x64: Includes multilib support (x86_64 + i386 preload libraries)
-            * Windows: NSIS installer with automatic PATH configuration
-            * All platforms: Platform-specific installation paths configured
+            * Linux: glibc high & glibc 2.17 across x86_64, aarch64,
+              armv7, and i686
+            * macOS: wrapper-mode DMG installers for x86_64 and Apple Silicon
+            * Windows: NSIS installer for x86_64 and aarch64
+            * Shell completions for bash, zsh, fish, and elvish
           files: dist/**

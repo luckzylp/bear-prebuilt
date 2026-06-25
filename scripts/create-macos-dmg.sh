@@ -1,6 +1,15 @@
 #!/bin/bash
-# Create macOS DMG package for Bear
-# This script builds a .dmg disk image for macOS systems
+# Create macOS DMG package for Bear (wrapper mode).
+#
+# Bear v3+ is implemented in Rust. The actual build products are:
+#   - bear-driver       (Rust binary, the entry point)
+#   - bear-wrapper      (Rust binary, sibling of bear-driver)
+#   - libexec.dylib     (cdylib from intercept-preload)
+#
+# The `bear` user-facing command is generated at install time by
+# `install.sh` (generated below) as a shell script that execs
+# bear-driver by absolute path. See Bear/INSTALL.md and
+# bear/src/installation.rs for the layout this script implements.
 
 set -e
 
@@ -8,207 +17,197 @@ VERSION="${1:-0.0.0}"
 TARGET_TRIPLE="${2:-x86_64-apple-darwin}"
 
 echo "================================================"
-echo "Creating Bear macOS DMG Package"
+echo "Creating Bear macOS DMG Package (wrapper mode)"
 echo "Version: $VERSION"
 echo "Target: $TARGET_TRIPLE"
 echo "================================================"
 
-# Determine architecture
 case "$TARGET_TRIPLE" in
-    x86_64-apple-darwin)
-        ARCH="x86_64"
-        ;;
-    aarch64-apple-darwin)
-        ARCH="arm64"
-        ;;
-    *)
-        echo "Warning: Unknown architecture for $TARGET_TRIPLE, using x86_64"
-        ARCH="x86_64"
-        ;;
+x86_64-apple-darwin) ARCH="x86_64" ;;
+aarch64-apple-darwin) ARCH="arm64" ;;
+*)
+	echo "Warning: Unknown architecture for $TARGET_TRIPLE, using x86_64"
+	ARCH="x86_64"
+	;;
 esac
 
 echo "Architecture: $ARCH"
-echo "Mode: wrapper (default for macOS)"
 
-# Determine directories
+# --- paths -------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BEAR_DIR="$PROJECT_ROOT/Bear"
 BUILD_DIR="$PROJECT_ROOT/build/macos"
 DIST_DIR="$PROJECT_ROOT/dist"
 
-# DMG specific directories
 DMG_STAGING="$BUILD_DIR/dmg-staging"
 APP_DIR="$DMG_STAGING/Bear.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
-# Clean and create build directory
+# Bear's on-disk layout (matches the install layout in Bear/scripts/install.sh)
+BEAR_INSTALL_DIR="$RESOURCES_DIR/usr/libexec/bear"
+BEAR_BIN_DIR="$BEAR_INSTALL_DIR/bin"
+BEAR_LIB_DIR="$BEAR_INSTALL_DIR/lib"
+BEAR_BIN_LINK_DIR="$RESOURCES_DIR/usr/local/bin"
+
 rm -rf "$BUILD_DIR"
-mkdir -p "$DMG_STAGING"
-mkdir -p "$MACOS_DIR"
-mkdir -p "$RESOURCES_DIR"
-mkdir -p "$DIST_DIR"
+mkdir -p "$DMG_STAGING" "$MACOS_DIR" "$RESOURCES_DIR" \
+	"$BEAR_BIN_DIR" "$BEAR_LIB_DIR" "$BEAR_BIN_LINK_DIR" \
+	"$DIST_DIR"
+echo "✓ Created staging directories"
 
-echo "✓ Created build directory structure"
-
-# Create Bear installation directory structure
-BEAR_INSTALL_DIR="$RESOURCES_DIR/usr/lib/libexec/bear"
-mkdir -p "$BEAR_INSTALL_DIR"
-
-echo "✓ Created Bear installation directory"
-
-# Determine the actual target directory
-# Strip .2.17 suffix if present (though macOS targets don't typically have this)
+# --- target dir --------------------------------------------------------------
 ACTUAL_TARGET="${TARGET_TRIPLE%.2.17}"
 TARGET_DIR="$BEAR_DIR/target/$ACTUAL_TARGET/release"
-
-# Copy binaries
-if [ -f "$TARGET_DIR/bear" ]; then
-    cp "$TARGET_DIR/bear" "$BEAR_INSTALL_DIR/"
-    echo "✓ Copied bear binary ($ACTUAL_TARGET)"
-else
-    echo "Error: bear binary not found at $TARGET_DIR/bear"
-    exit 1
+if [ ! -d "$TARGET_DIR" ]; then
+	TARGET_DIR="$BEAR_DIR/target/release"
 fi
 
-# Copy wrapper if exists
-if [ -f "$TARGET_DIR/wrapper" ]; then
-    cp "$TARGET_DIR/wrapper" "$BEAR_INSTALL_DIR/"
-    echo "✓ Copied wrapper binary"
-fi
-
-# Copy shared libraries (dylib on macOS)
-if compgen -G "$TARGET_DIR/*.dylib" > /dev/null 2>/dev/null; then
-    cp "$TARGET_DIR"/*.dylib "$BEAR_INSTALL_DIR/" 2>/dev/null || true
-    echo "✓ Copied shared libraries"
-fi
-
-# Copy architecture-specific library directories if they exist
-for libdir in x86_64 arm64; do
-    if [ -d "$TARGET_DIR/$libdir" ] && compgen -G "$TARGET_DIR/$libdir/*.dylib" > /dev/null 2>&1; then
-        mkdir -p "$BEAR_INSTALL_DIR/$libdir"
-        cp "$TARGET_DIR/$libdir"/*.dylib "$BEAR_INSTALL_DIR/$libdir/" || true
-        echo "✓ Copied libraries for $libdir"
-    fi
+for art in bear-driver bear-wrapper libexec.dylib; do
+	if [ ! -f "$TARGET_DIR/$art" ]; then
+		echo "Error: required artifact '$art' not found at $TARGET_DIR/$art"
+		echo "Did the cargo zigbuild for target '$TARGET_TRIPLE' complete successfully?"
+		exit 1
+	fi
 done
+echo "✓ Found required artifacts in $TARGET_DIR"
 
-# Copy documentation
-if [ -f "$BEAR_DIR/README.md" ]; then
-    cp "$BEAR_DIR/README.md" "$RESOURCES_DIR/"
-    echo "✓ Copied README.md"
+# --- stage binaries ----------------------------------------------------------
+install -m 0755 "$TARGET_DIR/bear-driver" "$BEAR_BIN_DIR/bear-driver"
+install -m 0755 "$TARGET_DIR/bear-wrapper" "$BEAR_BIN_DIR/bear-wrapper"
+install -m 0644 "$TARGET_DIR/libexec.dylib" "$BEAR_LIB_DIR/libexec.dylib"
+echo "✓ Staged bear-driver, bear-wrapper, libexec.dylib"
+
+# --- documentation -----------------------------------------------------------
+# Per Bear/INSTALL.md the on-disk layout is
+# $PREFIX/share/doc/bear/{README.md, COPYING}. We stage all of the
+# upstream docs in the DMG's Resources/share/doc/bear/ tree so the
+# embedded install.sh can copy them to /usr/local/share/doc/bear/.
+DOC_STAGE="$RESOURCES_DIR/usr/local/share/doc/bear"
+mkdir -p "$DOC_STAGE"
+for f in README.md INSTALL.md CONTRIBUTING.md RELEASE.md; do
+	if [ -f "$BEAR_DIR/$f" ]; then
+		install -m 0644 "$BEAR_DIR/$f" "$DOC_STAGE/$f"
+	fi
+done
+if [ -f "$BEAR_DIR/CODE_OF_CONDUCT.md" ]; then
+	install -m 0644 "$BEAR_DIR/CODE_OF_CONDUCT.md" "$DOC_STAGE/CODE_OF_CONDUCT.md"
 fi
-
-if [ -f "$BEAR_DIR/LICENSE" ]; then
-    cp "$BEAR_DIR/LICENSE" "$RESOURCES_DIR/"
-    echo "✓ Copied LICENSE"
+if [ -f "$BEAR_DIR/COPYING" ]; then
+	install -m 0644 "$BEAR_DIR/COPYING" "$DOC_STAGE/COPYING"
+elif [ -f "$BEAR_DIR/LICENSE" ]; then
+	install -m 0644 "$BEAR_DIR/LICENSE" "$DOC_STAGE/COPYING"
 fi
+# Top-level copies for the DMG's Finder preview.
+[ -f "$BEAR_DIR/README.md" ] && install -m 0644 "$BEAR_DIR/README.md" "$RESOURCES_DIR/README.md"
+[ -f "$BEAR_DIR/COPYING" ] && install -m 0644 "$BEAR_DIR/COPYING" "$RESOURCES_DIR/COPYING" \
+	|| [ -f "$BEAR_DIR/LICENSE" ] && install -m 0644 "$BEAR_DIR/LICENSE" "$RESOURCES_DIR/COPYING"
 
-# Copy man pages from Bear repository
+# man page(s)
 if [ -d "$BEAR_DIR/man" ]; then
-    echo ""
-    echo "Copying man pages..."
-    mkdir -p "$RESOURCES_DIR/usr/share/man/man1"
-
-    # Copy all man pages from Bear/man directory
-    MAN_COUNT=0
-    for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
-        if [ -f "$manfile" ]; then
-            cp "$manfile" "$RESOURCES_DIR/usr/share/man/man1/"
-            MAN_COUNT=$((MAN_COUNT + 1))
-        fi
-    done
-
-    if [ $MAN_COUNT -gt 0 ]; then
-        # Compress man pages (macOS standard)
-        gzip -9 "$RESOURCES_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
-        echo "✓ Copied and compressed $MAN_COUNT man page(s)"
-    else
-        echo "Warning: No man pages found in $BEAR_DIR/man"
-    fi
-else
-    echo "Warning: man directory not found at $BEAR_DIR/man"
+	mkdir -p "$RESOURCES_DIR/usr/share/man/man1"
+	for manfile in "$BEAR_DIR/man"/*.1 "$BEAR_DIR/man"/*/*.1; do
+		[ -f "$manfile" ] || continue
+		install -m 0644 "$manfile" "$RESOURCES_DIR/usr/share/man/man1/$(basename "$manfile")"
+	done
+	if compgen -G "$RESOURCES_DIR/usr/share/man/man1"/*.1 >/dev/null; then
+		gzip -9nf "$RESOURCES_DIR/usr/share/man/man1"/*.1 2>/dev/null || true
+	fi
 fi
 
-# Set permissions
-chmod 755 "$BEAR_INSTALL_DIR/bear"
-if [ -f "$BEAR_INSTALL_DIR/wrapper" ]; then
-    chmod 755 "$BEAR_INSTALL_DIR/wrapper"
+# shell completions
+COMPL_SRC="$TARGET_DIR/completions"
+if [ -d "$COMPL_SRC" ]; then
+	COMPL_DST="$RESOURCES_DIR/completions"
+	mkdir -p "$COMPL_DST"
+	[ -f "$COMPL_SRC/bear.bash" ] && install -m 0644 "$COMPL_SRC/bear.bash" "$COMPL_DST/bear.bash"
+	[ -f "$COMPL_SRC/_bear" ] && install -m 0644 "$COMPL_SRC/_bear" "$COMPL_DST/_bear"
+	[ -f "$COMPL_SRC/bear.fish" ] && install -m 0644 "$COMPL_SRC/bear.fish" "$COMPL_DST/bear.fish"
+	[ -f "$COMPL_SRC/bear.elv" ] && install -m 0644 "$COMPL_SRC/bear.elv" "$COMPL_DST/bear.elv"
 fi
-find "$BEAR_INSTALL_DIR" -type f -name "*.dylib" -exec chmod 644 {} \;
 
-echo "✓ Set file permissions"
-
-# Create installation script
-cat > "$MACOS_DIR/install.sh" << 'INSTALL_SCRIPT_EOF'
+# --- generate install.sh inside Bear.app -------------------------------------
+# Layout: copies bear-driver/wrapper/libexec.dylib into /usr/libexec/bear/,
+# generates /usr/local/bin/bear, installs man pages, completions.
+cat >"$MACOS_DIR/install.sh" <<'INSTALL_EOF'
 #!/bin/bash
-# Bear Installation Script
-
+# Bear installer (generated by bear-prebuilt).
 set -e
 
-INSTALL_DIR="/usr/lib/libexec/bear"
+INSTALL_ROOT="/usr/libexec/bear"
+BIN_LINK="/usr/local/bin/bear"
+MAN_DIR="/usr/local/share/man/man1"
+DOC_DIR="/usr/local/share/doc/bear"
+COMPL_DIR_BASH="/usr/local/share/bash-completion/completions"
+COMPL_DIR_ZSH="/usr/local/share/zsh/site-functions"
+COMPL_DIR_FISH="/usr/local/share/fish/vendor_completions.d"
+COMPL_DIR_ELV="/usr/local/share/elvish/lib"
+
 RESOURCES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../Resources" && pwd)"
-SOURCE_DIR="$RESOURCES_DIR/usr/lib/libexec/bear"
 
-echo "Installing Bear to $INSTALL_DIR..."
-
-# Check for root privileges
 if [ "$EUID" -ne 0 ]; then
-    echo "Please run with sudo or as root"
-    exit 1
+	echo "Please run with sudo: sudo $0" >&2
+	exit 1
 fi
 
-# Create installation directory
-mkdir -p "$INSTALL_DIR"
+echo "Installing Bear to $INSTALL_ROOT..."
 
-# Copy files
-echo "Copying files..."
-cp -R "$SOURCE_DIR"/* "$INSTALL_DIR/"
+# bear-driver and bear-wrapper
+mkdir -p "$INSTALL_ROOT/bin"
+install -m 0755 "$RESOURCES_DIR/usr/libexec/bear/bin/bear-driver" "$INSTALL_ROOT/bin/bear-driver"
+install -m 0755 "$RESOURCES_DIR/usr/libexec/bear/bin/bear-wrapper" "$INSTALL_ROOT/bin/bear-wrapper"
 
-# Set permissions
-chmod 755 "$INSTALL_DIR/bear"
-if [ -f "$INSTALL_DIR/wrapper" ]; then
-    chmod 755 "$INSTALL_DIR/wrapper"
+# preload library
+mkdir -p "$INSTALL_ROOT/lib"
+install -m 0755 "$RESOURCES_DIR/usr/libexec/bear/lib/libexec.dylib" "$INSTALL_ROOT/lib/libexec.dylib"
+
+# bear entry script
+mkdir -p "$(dirname "$BIN_LINK")"
+cat >"$BIN_LINK" <<'BEAR_ENTRY'
+#!/bin/sh
+exec "/usr/libexec/bear/bin/bear-driver" "$@"
+BEAR_ENTRY
+chmod 0755 "$BIN_LINK"
+
+# man pages
+if compgen -G "$RESOURCES_DIR/usr/share/man/man1"/*.gz >/dev/null 2>&1; then
+	mkdir -p "$MAN_DIR"
+	install -m 0644 "$RESOURCES_DIR/usr/share/man/man1"/*.gz "$MAN_DIR/" 2>/dev/null || true
+	if command -v makewhatis >/dev/null 2>&1; then
+		makewhatis "$MAN_DIR" 2>/dev/null || true
+	fi
 fi
-find "$INSTALL_DIR" -type f -name "*.dylib" -exec chmod 644 {} \;
 
-# Create symbolic link
-mkdir -p /usr/local/bin
-if [ -L /usr/local/bin/bear ]; then
-    rm /usr/local/bin/bear
+# completions (if shipped)
+if [ -d "$RESOURCES_DIR/completions" ]; then
+	[ -f "$RESOURCES_DIR/completions/bear.bash" ] && mkdir -p "$COMPL_DIR_BASH" && install -m 0644 "$RESOURCES_DIR/completions/bear.bash" "$COMPL_DIR_BASH/bear"
+	[ -f "$RESOURCES_DIR/completions/_bear" ] && mkdir -p "$COMPL_DIR_ZSH" && install -m 0644 "$RESOURCES_DIR/completions/_bear" "$COMPL_DIR_ZSH/_bear"
+	[ -f "$RESOURCES_DIR/completions/bear.fish" ] && mkdir -p "$COMPL_DIR_FISH" && install -m 0644 "$RESOURCES_DIR/completions/bear.fish" "$COMPL_DIR_FISH/bear.fish"
+	[ -f "$RESOURCES_DIR/completions/bear.elv" ] && mkdir -p "$COMPL_DIR_ELV" && install -m 0644 "$RESOURCES_DIR/completions/bear.elv" "$COMPL_DIR_ELV/bear.elv"
 fi
-ln -s "$INSTALL_DIR/bear" /usr/local/bin/bear
 
-# Install man pages if available
-if [ -d "$RESOURCES_DIR/usr/share/man/man1" ]; then
-    echo "Installing man pages..."
-    mkdir -p /usr/local/share/man/man1
-    cp "$RESOURCES_DIR/usr/share/man/man1"/*.gz /usr/local/share/man/man1/ 2>/dev/null || true
-
-    # Update man database if makewhatis is available
-    if command -v makewhatis >/dev/null 2>&1; then
-        makewhatis /usr/local/share/man 2>/dev/null || true
-    fi
+# documentation (per Bear/INSTALL.md share/doc/bear/)
+if [ -d "$RESOURCES_DIR/usr/local/share/doc/bear" ]; then
+	mkdir -p "$DOC_DIR"
+	for f in "$RESOURCES_DIR/usr/local/share/doc/bear"/*; do
+		[ -f "$f" ] || continue
+		install -m 0644 "$f" "$DOC_DIR/$(basename "$f")"
+	done
 fi
 
 echo ""
-echo "✓ Bear installed successfully!"
-echo "✓ Installed to: $INSTALL_DIR"
-echo "✓ Symlink created: /usr/local/bin/bear"
-if [ -d "$RESOURCES_DIR/usr/share/man/man1" ]; then
-    echo "✓ Man pages installed: /usr/local/share/man/man1"
-fi
+echo "✓ Bear installed to $INSTALL_ROOT"
+echo "✓ Symlink created: $BIN_LINK"
 echo ""
-echo "You can now run 'bear' from the command line."
-echo "View help with: man bear"
-INSTALL_SCRIPT_EOF
+echo "Open a new terminal and run: bear --version"
+INSTALL_EOF
+chmod 0755 "$MACOS_DIR/install.sh"
+echo "✓ Generated Bear.app/Contents/MacOS/install.sh"
 
-chmod 755 "$MACOS_DIR/install.sh"
-echo "✓ Created installation script"
-
-# Create Info.plist
-cat > "$CONTENTS_DIR/Info.plist" << PLIST_EOF
+# --- Info.plist --------------------------------------------------------------
+cat >"$CONTENTS_DIR/Info.plist" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -230,37 +229,41 @@ cat > "$CONTENTS_DIR/Info.plist" << PLIST_EOF
     <key>CFBundleVersion</key>
     <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>
-    <string>10.13</string>
+    <string>11.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
 </plist>
 PLIST_EOF
-
 echo "✓ Created Info.plist"
 
-# Create README file for DMG
-cat > "$DMG_STAGING/README.txt" << README_EOF
+# --- README ------------------------------------------------------------------
+cat >"$DMG_STAGING/README.txt" <<README_EOF
 Bear $VERSION (Wrapper Mode)
 
-INSTALLATION INSTRUCTIONS
-=========================
+INSTALLATION
+============
 
 1. Double-click Bear.app to run the installation script
-   (You will be prompted for your administrator password)
+   (you will be prompted for your administrator password).
 
-OR
+   OR
 
 2. Open Terminal and run:
-   cd "/Volumes/Bear $VERSION"
-   sudo ./Bear.app/Contents/MacOS/install.sh
+     cd "/Volumes/Bear $VERSION"
+     sudo ./Bear.app/Contents/MacOS/install.sh
 
-INSTALLATION DETAILS
-====================
+INSTALLATION LAYOUT
+===================
 
-Installation Path: /usr/lib/libexec/bear/
-Symlink: /usr/local/bin/bear -> /usr/lib/libexec/bear/bear
-Mode: Wrapper (default for macOS)
+  /usr/libexec/bear/
+  ├── bin/
+  │   ├── bear-driver
+  │   └── bear-wrapper
+  └── lib/
+      └── libexec.dylib
+
+  /usr/local/bin/bear          (shell script -> bear-driver)
 
 VERIFICATION
 ============
@@ -271,59 +274,35 @@ After installation, open a new terminal and run:
 UNINSTALLATION
 ==============
 
-To uninstall Bear:
-  sudo rm -rf /usr/lib/libexec/bear
+  sudo rm -rf /usr/libexec/bear
   sudo rm /usr/local/bin/bear
 
-For more information, visit:
-https://github.com/rizsotto/Bear
+  sudo rm -f /usr/local/share/man/man1/bear.1.gz
+  sudo rm -f /usr/local/share/bash-completion/completions/bear
+  sudo rm -f /usr/local/share/zsh/site-functions/_bear
+  sudo rm -f /usr/local/share/fish/vendor_completions.d/bear.fish
+  sudo rm -f /usr/local/share/elvish/lib/bear.elv
+
+More info: https://github.com/rizsotto/Bear
 README_EOF
 
-echo "✓ Created README.txt"
-
-# Display package contents
+# --- DMG ---------------------------------------------------------------------
 echo ""
-echo "Package contents:"
-echo "----------------"
-find "$DMG_STAGING" -type f | sed "s|$DMG_STAGING||" | sort
-
-# Create DMG
-echo ""
-echo "Creating DMG disk image..."
+echo "Creating DMG..."
 
 DMG_NAME="bear-${VERSION}-${TARGET_TRIPLE}-wrapper.dmg"
 DMG_FILE="$DIST_DIR/$DMG_NAME"
 DMG_TEMP="$BUILD_DIR/bear-temp.dmg"
-
-# Remove old DMG if exists
 rm -f "$DMG_FILE" "$DMG_TEMP"
 
-# Check if running on macOS (hdiutil available)
-if command -v hdiutil &> /dev/null; then
-    echo "Using macOS hdiutil to create DMG..."
+if command -v hdiutil >/dev/null 2>&1; then
+	hdiutil create -volname "Bear $VERSION" -srcfolder "$DMG_STAGING" -ov -format UDRW "$DMG_TEMP"
 
-    # Create temporary DMG
-    hdiutil create -volname "Bear $VERSION" \
-        -srcfolder "$DMG_STAGING" \
-        -ov -format UDRW \
-        "$DMG_TEMP"
+	MOUNT_DIR="/Volumes/Bear $VERSION"
+	hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
 
-    echo "✓ Created temporary DMG"
-
-    # Mount the temporary DMG
-    MOUNT_DIR="/Volumes/Bear $VERSION"
-    hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR"
-
-    echo "✓ Mounted temporary DMG"
-
-    # Add symlink to Applications (optional, for convenience)
-    # Note: This won't actually install Bear, just provides easy access to the installer
-    ln -s /Applications "$MOUNT_DIR/Applications" 2>/dev/null || true
-
-    # Set DMG background and icon positions (if running on macOS with GUI)
-    if command -v osascript &> /dev/null; then
-        echo "Configuring DMG appearance..."
-        osascript << APPLESCRIPT_EOF
+	if command -v osascript >/dev/null 2>&1; then
+		osascript <<APPLESCRIPT_EOF
 tell application "Finder"
     tell disk "Bear $VERSION"
         open
@@ -343,67 +322,18 @@ tell application "Finder"
     end tell
 end tell
 APPLESCRIPT_EOF
-        echo "✓ Configured DMG appearance"
-    else
-        echo "Note: Running in non-GUI environment, skipping DMG appearance configuration"
-    fi
+	fi
 
-    # Unmount
-    hdiutil detach "$MOUNT_DIR" -force
-
-    echo "✓ Unmounted DMG"
-
-    # Convert to compressed read-only DMG
-    hdiutil convert "$DMG_TEMP" \
-        -format UDZO \
-        -imagekey zlib-level=9 \
-        -o "$DMG_FILE"
-
-    echo "✓ Compressed DMG"
-
-    # Clean up temporary DMG
-    rm -f "$DMG_TEMP"
+	hdiutil detach "$MOUNT_DIR" -force -quiet
+	hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_FILE"
+	rm -f "$DMG_TEMP"
 else
-    # Not on macOS - create a tar.gz archive instead
-    echo "Warning: hdiutil not found (not running on macOS)"
-    echo "Creating tar.gz archive as fallback..."
-
-    cd "$BUILD_DIR"
-    tar czf "$DMG_FILE.tar.gz" -C dmg-staging .
-
-    # Rename to keep .dmg extension for compatibility
-    mv "$DMG_FILE.tar.gz" "${DMG_FILE%.dmg}.tar.gz"
-    DMG_FILE="${DMG_FILE%.dmg}.tar.gz"
-
-    echo "✓ Created tar.gz archive (use on macOS to extract and create proper DMG)"
+	echo "Warning: hdiutil not found (not on macOS). Falling back to .tar.gz."
+	tar czf "$DIST_DIR/$DMG_NAME.tar.gz" -C "$DMG_STAGING" .
+	DMG_FILE="$DIST_DIR/$DMG_NAME.tar.gz"
 fi
 
-if [ -f "$DMG_FILE" ]; then
-    echo ""
-    echo "✓ macOS DMG package created successfully!"
-    echo "Location: $DMG_FILE"
-
-    # Display DMG information
-    echo ""
-    echo "DMG Details:"
-    echo "  Name: $DMG_NAME"
-    DMG_SIZE=$(du -h "$DMG_FILE" | cut -f1)
-    echo "  Size: $DMG_SIZE"
-    echo "  Architecture: $ARCH"
-    echo "  Mode: wrapper (default for macOS)"
-    echo "  Format: UDZO (compressed)"
-
-    echo ""
-    echo "Installation Instructions:"
-    echo "  1. Double-click the DMG to mount it"
-    echo "  2. Double-click Bear.app to install"
-    echo "  3. Enter your administrator password when prompted"
-
-    echo ""
-    echo "================================================"
-    echo "macOS DMG creation completed (wrapper mode)!"
-    echo "================================================"
-else
-    echo "Error: Failed to create DMG package"
-    exit 1
-fi
+echo ""
+echo "✓ macOS DMG created: $DMG_FILE"
+echo "  Architecture: $ARCH"
+echo "================================================"

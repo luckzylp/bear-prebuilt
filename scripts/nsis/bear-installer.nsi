@@ -1,5 +1,8 @@
 ; ==========================================
 ; Bear Installer (x64 / ARM64 compatible)
+; Aligned with Bear v3+ Windows layout (bear/INSTALL.md and
+; bear/src/installation.rs): only bear-driver.exe and bear-wrapper.exe
+; are produced. The `bear` user command is a generated .cmd shim.
 ; ==========================================
 
 Unicode true
@@ -27,7 +30,6 @@ SetCompressor /SOLID lzma
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "FileFunc.nsh"
-!include "WinMessages.nsh"
 
 !insertmacro GetSize
 
@@ -65,24 +67,21 @@ InstallDirRegKey HKLM "Software\${APP_NAME}" "InstallDir"
 
 Function DisableDirPage
     FindWindow $0 "#32770" "" $HWNDPARENT
-    GetDlgItem $1 $0 1019 ; Browse
+    GetDlgItem $1 $0 1019
     EnableWindow $1 0
-    GetDlgItem $1 $0 1001 ; Path edit
+    GetDlgItem $1 $0 1001
     EnableWindow $1 0
 FunctionEnd
 
 ; ------------------------------------------
-; Architecture sanity check (runtime)
+; Architecture sanity check
 
 Function .onInit
-    ; Check if running on x64 Windows
     ${If} ${RunningX64}
-        ; This is x64 Windows, check if installer matches
         StrCmp "${TARGET_TRIPLE}" "x86_64-pc-windows-msvc" ok_arch 0
-        MessageBox MB_ICONSTOP "This installer is for x86_64 architecture but you are trying to install on a different architecture."
+        MessageBox MB_ICONSTOP "This installer is for x86_64, but you are on a different architecture."
         Abort
     ${Else}
-        ; Not x64, could be ARM64 or x86
         StrCmp "${TARGET_TRIPLE}" "aarch64-pc-windows-msvc" ok_arch 0
         MessageBox MB_ICONSTOP "This installer requires 64-bit Windows."
         Abort
@@ -97,16 +96,19 @@ Section "Bear Core" SecCore
     SectionIn RO
     SetOutPath "$INSTDIR"
 
-    ; Executable
-    File /oname=bear.exe "${BASE_DIR}\${TARGET_DIR}\bear.exe"
+    DetailPrint "Including bear-driver.exe"
+    File "${BASE_DIR}\${TARGET_DIR}\bear-driver.exe"
 
-    ; Wrapper executable - always include, will be silently skipped if not found
-    DetailPrint "Including wrapper.exe from: ${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
-    File /oname=wrapper.exe "${BASE_DIR}\${TARGET_DIR}\wrapper.exe"
+    DetailPrint "Including bear-wrapper.exe"
+    File "${BASE_DIR}\${TARGET_DIR}\bear-wrapper.exe"
 
-    ; Optional DLLs - always try to include
-    DetailPrint "Including DLLs from: ${BASE_DIR}\${TARGET_DIR}\*.dll"
-    File "${BASE_DIR}\${TARGET_DIR}\*.dll"
+    ; Generated `bear` shim (cmd). Calls bear-driver.exe by relative path
+    ; so it works regardless of the absolute install location.
+    FileOpen $0 "$INSTDIR\bear.cmd" w
+    FileWrite $0 "@echo off$\r$\n"
+    FileWrite $0 "$\"%~dp0bear-driver.exe$\" %*$\r$\n"
+    FileClose $0
+    DetailPrint "Generated bear.cmd shim"
 
     ; Docs
     DetailPrint "Including README.md"
@@ -127,9 +129,12 @@ Section "Bear Core" SecCore
     WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "${PUBLISHER}"
     WriteRegStr HKLM "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-    WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\bear.exe"
+    WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\bear-driver.exe"
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoModify" 1
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
+
+    ; Tell the user to add $INSTDIR to PATH manually.
+    DetailPrint "Add $INSTDIR to your PATH to use 'bear' from any shell."
 
     ; Size
     ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
@@ -141,9 +146,9 @@ SectionEnd
 ; Uninstall section
 
 Section "Uninstall"
-    Delete "$INSTDIR\bear.exe"
-    Delete "$INSTDIR\wrapper.exe"
-    Delete "$INSTDIR\*.dll"
+    Delete "$INSTDIR\bear-driver.exe"
+    Delete "$INSTDIR\bear-wrapper.exe"
+    Delete "$INSTDIR\bear.cmd"
     Delete "$INSTDIR\README.md"
     Delete "$INSTDIR\LICENSE.txt"
     Delete "$INSTDIR\Uninstall.exe"

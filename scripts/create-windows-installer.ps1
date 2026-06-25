@@ -1,5 +1,10 @@
-# PowerShell script to create Windows installer using NSIS
-# This script packages Bear binaries into a Windows installer
+# PowerShell script to create Windows installer using NSIS.
+#
+# Bear v3+ on Windows produces only two executables (per Bear/INSTALL.md):
+#   - bear-driver.exe
+#   - bear-wrapper.exe
+# There is no preload library on Windows. The user-facing `bear` command is
+# a small .cmd shim that calls bear-driver.exe with the forwarded arguments.
 
 param(
     [string]$Version = "0.0.0",
@@ -15,89 +20,71 @@ Write-Host "Version: $Version" -ForegroundColor Cyan
 Write-Host "Target: $TargetTriple" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-# Determine script and project directories
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $NSISDir = Join-Path $ScriptDir "nsis"
 $DistDir = Join-Path $ProjectRoot "dist"
 
-# Use custom SourcePath if provided, otherwise use default Bear directory
-if ($SourcePath -eq "")
-{
+if ($SourcePath -eq "") {
     $BearDir = Join-Path $ProjectRoot "Bear"
-} else
-{
+} else {
     $BearDir = $SourcePath
     Write-Host "Using custom SourcePath: $BearDir" -ForegroundColor Yellow
 }
 
-# Determine the actual target directory
+# --- target dir -------------------------------------------------------------
 $ActualTarget = $TargetTriple -replace '\.2\.17$', ''
 $TargetDir = Join-Path $BearDir "target\$ActualTarget\release"
-
-Write-Host "BASE_DIR will be: ..\..\Bear (relative to NSIS script)" -ForegroundColor Cyan
+if (-not (Test-Path $TargetDir)) {
+    $TargetDir = Join-Path $BearDir "target\release"
+}
 Write-Host "Actual target directory: $TargetDir" -ForegroundColor Cyan
 
-# Verify Bear binaries exist
-$BearExe = Join-Path $TargetDir "bear.exe"
-if (-not (Test-Path $BearExe))
-{
-    Write-Host "Error: bear.exe not found at $BearExe" -ForegroundColor Red
-    Write-Host "Please build Bear first." -ForegroundColor Yellow
-    exit 1
+# --- validate artifacts ----------------------------------------------------
+$DriverExe = Join-Path $TargetDir "bear-driver.exe"
+$WrapperExe = Join-Path $TargetDir "bear-wrapper.exe"
+foreach ($art in @($DriverExe, $WrapperExe)) {
+    if (-not (Test-Path $art)) {
+        Write-Host "Error: required artifact not found: $art" -ForegroundColor Red
+        Write-Host "Did the cargo build for target '$TargetTriple' complete successfully?" -ForegroundColor Yellow
+        exit 1
+    }
 }
+Write-Host "✓ Found bear-driver.exe and bear-wrapper.exe" -ForegroundColor Green
 
-Write-Host "✓ Found bear.exe" -ForegroundColor Green
-
-# Verify NSIS script exists
+# --- NSIS script ------------------------------------------------------------
 $NSISScript = Join-Path $NSISDir "bear-installer.nsi"
-if (-not (Test-Path $NSISScript))
-{
+if (-not (Test-Path $NSISScript)) {
     Write-Host "Error: NSIS script not found at $NSISScript" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "✓ Found NSIS script" -ForegroundColor Green
-
-# Ensure LICENSE file exists (NSIS requires .txt extension)
+# --- LICENSE.txt (NSIS requires .txt extension) ----------------------------
 $LicenseSource = Join-Path $BearDir "LICENSE"
 $LicenseTarget = Join-Path $BearDir "LICENSE.txt"
-
-if (Test-Path $LicenseSource)
-{
-    # Always copy/update LICENSE.txt to ensure it exists
+$HaveLicense = $false
+if (Test-Path $BearDir "COPYING") {
+    Copy-Item (Join-Path $BearDir "COPYING") $LicenseTarget -Force
+    $HaveLicense = $true
+} elseif (Test-Path $LicenseSource) {
     Copy-Item $LicenseSource $LicenseTarget -Force
-    Write-Host "✓ Created LICENSE.txt" -ForegroundColor Green
-} elseif (-not (Test-Path $LicenseTarget))
-{
-    # If no LICENSE file exists at all, create a minimal one
-    Write-Host "Warning: LICENSE file not found, creating minimal license" -ForegroundColor Yellow
-    $MinimalLicense = @"
+    $HaveLicense = $true
+} elseif (-not (Test-Path $LicenseTarget)) {
+    Write-Host "Warning: LICENSE/COPYING not found, creating minimal license stub" -ForegroundColor Yellow
+    @"
 Bear - Build EAR (Compilation Database) Tool
 
-This is a prebuilt distribution of Bear.
-
-For full license information, please visit:
+Prebuilt distribution. For full license information see:
 https://github.com/rizsotto/Bear
-
-Copyright (c) Bear Development Team
-"@
-    Set-Content -Path $LicenseTarget -Value $MinimalLicense
-    Write-Host "✓ Created minimal LICENSE.txt" -ForegroundColor Green
+"@ | Set-Content -Path $LicenseTarget
 }
 
-# Create distribution directory
-if (-not (Test-Path $DistDir))
-{
+# --- ensure dist dir exists -------------------------------------------------
+if (-not (Test-Path $DistDir)) {
     New-Item -ItemType Directory -Path $DistDir | Out-Null
-    Write-Host "✓ Created dist directory" -ForegroundColor Green
 }
 
-# Build installer with NSIS
-Write-Host ""
-Write-Host "Building installer..." -ForegroundColor Cyan
-
-# Find NSIS executable
+# --- find NSIS --------------------------------------------------------------
 $NSISPath = $null
 $PossiblePaths = @(
     "C:\Program Files (x86)\NSIS\makensis.exe",
@@ -105,71 +92,51 @@ $PossiblePaths = @(
     "$env:ProgramFiles\NSIS\makensis.exe",
     "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
 )
-
-foreach ($Path in $PossiblePaths)
-{
-    if (Test-Path $Path)
-    {
-        $NSISPath = $Path
-        break
-    }
+foreach ($p in $PossiblePaths) {
+    if (Test-Path $p) { $NSISPath = $p; break }
 }
-
-# Try to find in PATH
-if (-not $NSISPath)
-{
-    $NSISPath = Get-Command makensis.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+if (-not $NSISPath) {
+    $NSISPath = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
 }
-
-if (-not $NSISPath)
-{
-    Write-Host "Error: NSIS not found. Please install NSIS from https://nsis.sourceforge.io/" -ForegroundColor Red
-    Write-Host "Or install via Chocolatey: choco install nsis" -ForegroundColor Yellow
+if (-not $NSISPath) {
+    Write-Host "Error: NSIS not found. Install via Chocolatey: choco install nsis" -ForegroundColor Red
     exit 1
 }
+Write-Host "✓ NSIS at: $NSISPath" -ForegroundColor Green
 
-Write-Host "✓ Found NSIS at: $NSISPath" -ForegroundColor Green
-
+# --- run NSIS ---------------------------------------------------------------
 $NSISArgs = @(
-    "/DAPP_VERSION=$Version",
-    "/DTARGET_TRIPLE=$ActualTarget",
-    "/V4",  # Verbose level 4
+    "/DAPP_VERSION=$Version"
+    "/DTARGET_TRIPLE=$ActualTarget"
+    "/V4"
     $NSISScript
 )
 
+Write-Host ""
+Write-Host "Building installer..." -ForegroundColor Cyan
 & $NSISPath $NSISArgs
-
-if ($LASTEXITCODE -ne 0)
-{
-    Write-Host "Error: NSIS compilation failed" -ForegroundColor Red
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: NSIS compilation failed (exit $LASTEXITCODE)" -ForegroundColor Red
     exit $LASTEXITCODE
 }
 
-# Move installer to dist directory
+# --- move installer ---------------------------------------------------------
 $InstallerName = "bear-$Version-$TargetTriple-installer.exe"
 $InstallerSource = Join-Path $NSISDir $InstallerName
 $InstallerTarget = Join-Path $DistDir "bear-$Version-$TargetTriple-installer.exe"
 
-if (Test-Path $InstallerSource)
-{
+if (Test-Path $InstallerSource) {
     Move-Item -Path $InstallerSource -Destination $InstallerTarget -Force
     Write-Host ""
-    Write-Host "✓ Installer created successfully!" -ForegroundColor Green
-    Write-Host "Location: $InstallerTarget" -ForegroundColor Cyan
-} else
-{
-    Write-Host "Error: Installer not found at expected location" -ForegroundColor Red
+    Write-Host "✓ Installer created: $InstallerTarget" -ForegroundColor Green
+} else {
+    Write-Host "Error: installer not found at $InstallerSource" -ForegroundColor Red
     exit 1
 }
 
-# Display installer information
-$InstallerSize = (Get-Item $InstallerTarget).Length / 1MB
-Write-Host ""
-Write-Host "Installer Details:" -ForegroundColor Cyan
-Write-Host "  Name: $(Split-Path -Leaf $InstallerTarget)" -ForegroundColor White
-Write-Host "  Size: $([math]::Round($InstallerSize, 2)) MB" -ForegroundColor White
-Write-Host "  Path: $InstallerTarget" -ForegroundColor White
-
+$SizeMB = [math]::Round((Get-Item $InstallerTarget).Length / 1MB, 2)
+Write-Host "  Name: $(Split-Path -Leaf $InstallerTarget)"
+Write-Host "  Size: $SizeMB MB"
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "Windows installer creation completed!" -ForegroundColor Green
