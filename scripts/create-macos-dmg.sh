@@ -102,8 +102,11 @@ elif [ -f "$BEAR_DIR/LICENSE" ]; then
 fi
 # Top-level copies for the DMG's Finder preview.
 [ -f "$BEAR_DIR/README.md" ] && install -m 0644 "$BEAR_DIR/README.md" "$RESOURCES_DIR/README.md"
-[ -f "$BEAR_DIR/COPYING" ] && install -m 0644 "$BEAR_DIR/COPYING" "$RESOURCES_DIR/COPYING" \
-	|| [ -f "$BEAR_DIR/LICENSE" ] && install -m 0644 "$BEAR_DIR/LICENSE" "$RESOURCES_DIR/COPYING"
+if [ -f "$BEAR_DIR/COPYING" ]; then
+	install -m 0644 "$BEAR_DIR/COPYING" "$RESOURCES_DIR/COPYING"
+elif [ -f "$BEAR_DIR/LICENSE" ]; then
+	install -m 0644 "$BEAR_DIR/LICENSE" "$RESOURCES_DIR/COPYING"
+fi
 
 # man page(s)
 if [ -d "$BEAR_DIR/man" ]; then

@@ -62,14 +62,15 @@ if (-not (Test-Path $NSISScript)) {
 # --- LICENSE.txt (NSIS requires .txt extension) ----------------------------
 $LicenseSource = Join-Path $BearDir "LICENSE"
 $LicenseTarget = Join-Path $BearDir "LICENSE.txt"
+$CopyingSource = Join-Path $BearDir "COPYING"
 $HaveLicense = $false
-if (Test-Path $BearDir "COPYING") {
-    Copy-Item (Join-Path $BearDir "COPYING") $LicenseTarget -Force
+if (Test-Path -Path $CopyingSource) {
+    Copy-Item $CopyingSource $LicenseTarget -Force
     $HaveLicense = $true
-} elseif (Test-Path $LicenseSource) {
+} elseif (Test-Path -Path $LicenseSource) {
     Copy-Item $LicenseSource $LicenseTarget -Force
     $HaveLicense = $true
-} elseif (-not (Test-Path $LicenseTarget)) {
+} elseif (-not (Test-Path -Path $LicenseTarget)) {
     Write-Host "Warning: LICENSE/COPYING not found, creating minimal license stub" -ForegroundColor Yellow
     @"
 Bear - Build EAR (Compilation Database) Tool
