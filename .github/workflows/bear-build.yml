@@ -30,7 +30,13 @@ jobs:
 
   build:
     needs: get-version
-    runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || contains(matrix.target, 'darwin') && 'macos-latest' || 'ubuntu-latest' }}
+    # macOS runner is pinned to macos-15 because the macos-latest alias
+    # auto-migrates to macOS 26 on 2026-06-15 (see
+    # https://github.com/actions/runner-images/issues/14167). macOS 26
+    # is expected to ship SDK/toolchain changes that we have not yet
+    # validated against Bear 4.x. Update this pin once we've confirmed
+    # Bear still builds cleanly on the new image.
+    runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || contains(matrix.target, 'darwin') && 'macos-15' || 'ubuntu-latest' }}
 
     strategy:
       fail-fast: false
