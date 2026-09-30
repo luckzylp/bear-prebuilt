@@ -16,16 +16,18 @@
 # `INTERCEPT_LIBDIR` is the critical knob: bear-driver resolves
 # libexec.so as `parent_dir.join(INTERCEPT_LIBDIR)`, where
 # `parent_dir` is the parent of bear-driver's bin/ directory.
-# We set it to the Debian multiarch subpath so the 64-bit bear-driver
-# resolves `../$MULTIARCH_LIBDIR/libexec.so` to the 64-bit preload.
+# bear-driver is compiled with `INTERCEPT_LIBDIR=$LIB`; glibc's ld.so
+# expands `$LIB` to the Debian multiarch subpath per process
+# architecture (e.g. `lib/x86_64-linux-gnu` for 64-bit,
+# `lib/i386-linux-gnu` for 32-bit), so the correct libexec.so is
+# loaded automatically.
 #
 # Multilib (amd64 only)
 # ---------------------
 # A 32-bit libexec.so is installed alongside the 64-bit one — without
-# shipping a 32-bit bear-driver. The 64-bit bear-driver remains the
-# single host-bits entry point; the 32-bit preload is available for
-# users who invoke 32-bit tooling directly with a manual
-# `LD_PRELOAD=/usr/libexec/bear/lib/i386-linux-gnu/libexec.so …`.
+# shipping a 32-bit bear-driver. The 64-bit bear-driver (compiled with
+# `INTERCEPT_LIBDIR=$LIB`) transparently loads the 32-bit preload when
+# intercepting 32-bit processes, so no manual `LD_PRELOAD` is needed.
 #
 #   /usr/
 #   ├── bin/bear                                       (64-bit entry -> bear-driver)

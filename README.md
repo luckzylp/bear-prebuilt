@@ -17,9 +17,13 @@ with the installation layout described in Bear's upstream
 Bear v3+ is implemented in Rust. Runtime wrapper/preload lookup paths are
 configured at **build time** through the `INTERCEPT_LIBDIR` env var (see
 `crates/intercept-supervisor/build.rs` and
-`crates/intercept-supervisor/src/installation.rs` in the Bear source). CI
-sets `INTERCEPT_LIBDIR` to concrete Debian multiarch subpaths on glibc
-Linux and `lib` elsewhere.
+`crates/intercept-supervisor/src/installation.rs` in the Bear source). On
+glibc Linux, CI uses the `$LIB` token — glibc's `ld.so` expands it to the
+Debian multiarch subpath per process architecture at runtime (e.g.
+`lib/x86_64-linux-gnu` for 64-bit, `lib/i386-linux-gnu` for 32-bit). This
+enables transparent multilib interception: a 64-bit `bear-driver` intercepts
+both 64-bit and 32-bit compiler processes automatically. Elsewhere, `lib`
+is used.
 
 ## Build Process
 
@@ -44,10 +48,9 @@ Linux and `lib` elsewhere.
 - `aarch64-apple-darwin`
 
 **`INTERCEPT_LIBDIR` per target** (matches Bear's `INSTALL.md`):
-- x86_64 Linux: `lib/x86_64-linux-gnu`
-- aarch64 Linux: `lib/aarch64-linux-gnu`
-- armv7 Linux: `lib/arm-linux-gnueabihf`
-- i686 Linux: `lib/i386-linux-gnu`
+- Linux: `$LIB` (expanded by `ld.so` to the Debian multiarch subpath per
+  process architecture, e.g. `lib/x86_64-linux-gnu` for 64-bit,
+  `lib/i386-linux-gnu` for 32-bit)
 - macOS / Windows: `lib`
 
 ## Manual Build Instructions
@@ -81,8 +84,8 @@ cd ..
 ```bash
 cd Bear
 
-# glibc Linux — concrete multiarch subpath
-INTERCEPT_LIBDIR=lib/x86_64-linux-gnu cargo zigbuild --release --target x86_64-unknown-linux-gnu
+# glibc Linux — $LIB token (expanded by ld.so per process architecture)
+INTERCEPT_LIBDIR='$LIB' cargo zigbuild --release --target <target-triple>
 
 # macOS — concrete directory
 INTERCEPT_LIBDIR=lib cargo zigbuild --release --target x86_64-apple-darwin
@@ -191,21 +194,20 @@ bear-prebuilt/
 - Registered in Windows Add/Remove Programs
 
 ### Linux
-- Layout follows `Bear/INSTALL.md` with the **Debian multiarch
-  `INTERCEPT_LIBDIR`** baked in at compile time. Each architecture's
-  `bear-driver` resolves `../$INTERCEPT_LIBDIR/libexec.so` to the
-  matching multiarch subdirectory:
+- Layout follows `Bear/INSTALL.md`. `bear-driver` is compiled with
+  `INTERCEPT_LIBDIR=$LIB`; glibc's `ld.so` expands `$LIB` to the Debian
+  multiarch subpath per process architecture at runtime:
   - amd64: `/usr/libexec/bear/lib/x86_64-linux-gnu/libexec.so`
   - arm64: `/usr/libexec/bear/lib/aarch64-linux-gnu/libexec.so`
   - armhf: `/usr/libexec/bear/lib/arm-linux-gnueabihf/libexec.so`
   - i386:  `/usr/libexec/bear/lib/i386-linux-gnu/libexec.so`
 - **Multilib (amd64 only)**: ships a 32-bit `libexec.so` alongside
-  the 64-bit one at `/usr/libexec/bear/lib/i386-linux-gnu/libexec.so`
-  for users who run 32-bit tooling and need to inject the preload
-  manually (e.g. `LD_PRELOAD=.../lib/i386-linux-gnu/libexec.so ...`).
-  No 32-bit `bear-driver`/`bear-wrapper`/`bear32` entry is shipped —
-  the 64-bit entry remains the single host-bits command. The `.deb`
-  Recommends `libc6-i386` and Suggests `gcc-multilib` so apt pulls
+  the 64-bit one at `/usr/libexec/bear/lib/i386-linux-gnu/libexec.so`.
+  Because `$LIB` is expanded per-process by `ld.so`, the 64-bit
+  `bear-driver` **transparently intercepts 32-bit compiler processes**
+  — no manual `LD_PRELOAD` needed. No 32-bit `bear-driver`/`bear-wrapper`
+  is shipped; the 64-bit entry remains the single host-bits command. The
+  `.deb` Recommends `libc6-i386` and Suggests `gcc-multilib` so apt pulls
   the 32-bit runtime when the user wants to use the preload.
 - Per-target .deb files for glibc high and glibc 2.17 across
   amd64, arm64, armhf, and i386
