@@ -1,5 +1,5 @@
 diff --git a/crates/bear/src/output/writers/atomic.rs b/crates/bear/src/output/writers/atomic.rs
-index 0ea29364..593f4caa 100644
+index 0ea29364..eea42886 100644
 --- a/crates/bear/src/output/writers/atomic.rs
 +++ b/crates/bear/src/output/writers/atomic.rs
 @@ -16,10 +16,17 @@ use std::{fs, path};
@@ -107,14 +107,14 @@ index 0ea29364..593f4caa 100644
 +/// std does not consistently map ERROR_SHARING_VIOLATION to a specific
 +/// `ErrorKind`.
 +#[cfg(not(unix))]
-+fn is_file_lock_error(err: &io::Error) -> bool {
++fn is_file_lock_error(err: &std::io::Error) -> bool {
 +    const ERROR_SHARING_VIOLATION: i32 = 32;
 +    const ERROR_ACCESS_DENIED: i32 = 5;
 +    if let Some(code) = err.raw_os_error() {
 +        return code == ERROR_SHARING_VIOLATION || code == ERROR_ACCESS_DENIED;
 +    }
 +    // Fallback for Rust versions that do map these to PermissionDenied.
-+    err.kind() == io::ErrorKind::PermissionDenied
++    err.kind() == std::io::ErrorKind::PermissionDenied
 +}
 +
  #[cfg(test)]
