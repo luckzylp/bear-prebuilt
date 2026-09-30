@@ -77,6 +77,17 @@ jobs:
           clean: true
           fetch-depth: 1
 
+      - name: Patch atomic write for Windows file locking
+        working-directory: bear-prebuilt/Bear
+        shell: bash
+        run: |
+          # On Windows, std::fs::rename fails when compile_commands.json
+          # is locked by another process (clangd, IDE, antivirus),
+          # leaving only a .tmp file. This patch adds retry-with-backoff
+          # and a copy fallback to the atomic writer.
+          # Remove this step once the fix is merged upstream.
+          git apply ../scripts/patch-atomic-write-windows.patch
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

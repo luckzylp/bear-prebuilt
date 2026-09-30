@@ -1,0 +1,122 @@
+diff --git a/crates/bear/src/output/writers/atomic.rs b/crates/bear/src/output/writers/atomic.rs
+index 0ea29364..593f4caa 100644
+--- a/crates/bear/src/output/writers/atomic.rs
++++ b/crates/bear/src/output/writers/atomic.rs
+@@ -16,10 +16,17 @@ use std::{fs, path};
+ /// destination share a filesystem, so the temp path is co-located with the output (the same
+ /// path with a `.tmp` extension). That temp path is deterministic rather than random, which
+ /// keeps cleanup simple at the cost of racing two Bear processes writing the same output;
+-/// concurrent writes to one database are intentionally unsupported. On Windows the underlying
+-/// `MoveFileEx`/`MOVEFILE_REPLACE_EXISTING` is not fully atomic under all conditions, a
+-/// platform limitation Bear accepts. On failure the error references the temp path for a
+-/// serialization error and the final path for a rename error, to point at the likely cause.
++/// concurrent writes to one database are intentionally unsupported.
++///
++/// On Windows, `MoveFileEx`/`MOVEFILE_REPLACE_EXISTING` fails when the destination file is
++/// open without `FILE_SHARE_DELETE` -- a common condition when clangd, an IDE, or an
++/// antivirus scanner holds `compile_commands.json`. The rename is retried with a short
++/// backoff to ride out transient locks. If the destination remains locked after all retries,
++/// the function falls back to `fs::copy` + `fs::remove_file`, which succeeds when the
++/// destination is open with `FILE_SHARE_WRITE` but not `FILE_SHARE_DELETE`. This sacrifices
++/// atomicity for a brief window but avoids leaving the user with only a `.tmp` file.
++/// On failure the error references the temp path for a serialization error and the final
++/// path for a rename error, to point at the likely cause.
+ pub(crate) struct AtomicClangOutputWriter<T: IteratorWriter<clang::Entry>> {
+     writer: T,
+     temp_path: path::PathBuf,
+@@ -36,13 +43,94 @@ impl<T: IteratorWriter<clang::Entry>> IteratorWriter<clang::Entry> for AtomicCla
+     fn write(self, entries: impl Iterator<Item = clang::Entry>) -> Result<(), WriterError> {
+         self.writer.write(entries)?;
+ 
+-        fs::rename(&self.temp_path, &self.final_path)
++        rename_atomic(&self.temp_path, &self.final_path)
+             .map_err(|err| WriterError::Io(self.final_path, SerializationError::Io(err)))?;
+ 
+         Ok(())
+     }
+ }
+ 
++/// Renames `temp_path` to `final_path`, atomically replacing any existing
++/// destination file.
++///
++/// On Unix, `rename(2)` atomically replaces the destination even when it is
++/// open in another process, so no retry or fallback is needed.
++///
++/// On Windows, `MoveFileEx` with `MOVEFILE_REPLACE_EXISTING` fails when the
++/// destination is open without `FILE_SHARE_DELETE`. The rename is retried
++/// with a short backoff to ride out transient locks (antivirus scans, brief
++/// file-watcher locks). If the destination remains locked after all retries,
++/// the function falls back to `fs::copy` + `fs::remove_file`, which succeeds
++/// when the destination handle grants `FILE_SHARE_WRITE` but not
++/// `FILE_SHARE_DELETE` -- the most common sharing mode for tools like clangd
++/// that read the database. This trades atomicity for a brief window but
++/// avoids leaving the user with only a `.tmp` file.
++fn rename_atomic(temp_path: &path::Path, final_path: &path::Path) -> std::io::Result<()> {
++    #[cfg(unix)]
++    {
++        fs::rename(temp_path, final_path)
++    }
++
++    #[cfg(not(unix))]
++    {
++        use std::{io, thread, time::Duration};
++
++        // Retry delays for transient locks: 10, 20, 40, 80, 160 ms
++        // (total worst case ~310 ms before falling back).
++        const RETRY_DELAYS: [Duration; 5] = [
++            Duration::from_millis(10),
++            Duration::from_millis(20),
++            Duration::from_millis(40),
++            Duration::from_millis(80),
++            Duration::from_millis(160),
++        ];
++
++        // Phase 1: retry the atomic rename with backoff.
++        for delay in &RETRY_DELAYS {
++            match fs::rename(temp_path, final_path) {
++                Ok(()) => return Ok(()),
++                Err(err) if is_file_lock_error(&err) => {
++                    thread::sleep(*delay);
++                }
++                // Non-locking errors (e.g. disk full, permission) are
++                // not retryable.
++                Err(err) => return Err(err),
++            }
++        }
++
++        // Phase 2: all rename attempts failed due to a persistent lock.
++        // Fall back to copy + remove. CopyFileEx opens the destination
++        // with CREATE_ALWAYS, which succeeds when the existing handle
++        // grants FILE_SHARE_WRITE -- even if FILE_SHARE_DELETE was
++        // withheld (which is what blocked the rename).
++        log::warn!(
++            "could not atomically rename {} to {} (file is likely locked by another process; \
++             falling back to non-atomic copy)",
++            temp_path.display(),
++            final_path.display(),
++        );
++        fs::copy(temp_path, final_path)?;
++        fs::remove_file(temp_path)?;
++        Ok(())
++    }
++}
++
++/// Returns true when the error indicates a Windows file-locking condition
++/// that may be transient and worth retrying: sharing violation (32) or
++/// access denied (5). The raw OS error code is checked directly because
++/// std does not consistently map ERROR_SHARING_VIOLATION to a specific
++/// `ErrorKind`.
++#[cfg(not(unix))]
++fn is_file_lock_error(err: &io::Error) -> bool {
++    const ERROR_SHARING_VIOLATION: i32 = 32;
++    const ERROR_ACCESS_DENIED: i32 = 5;
++    if let Some(code) = err.raw_os_error() {
++        return code == ERROR_SHARING_VIOLATION || code == ERROR_ACCESS_DENIED;
++    }
++    // Fallback for Rust versions that do map these to PermissionDenied.
++    err.kind() == io::ErrorKind::PermissionDenied
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
