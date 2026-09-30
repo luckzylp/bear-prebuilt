@@ -9,7 +9,8 @@
 # The `bear` user-facing command is generated at install time by
 # `install.sh` (generated below) as a shell script that execs
 # bear-driver by absolute path. See Bear/INSTALL.md and
-# bear/src/installation.rs for the layout this script implements.
+# crates/intercept-supervisor/src/installation.rs for the layout this
+# script implements.
 
 set -e
 
@@ -87,7 +88,7 @@ echo "✓ Staged bear-driver, bear-wrapper, libexec.dylib"
 # embedded install.sh can copy them to /usr/local/share/doc/bear/.
 DOC_STAGE="$RESOURCES_DIR/usr/local/share/doc/bear"
 mkdir -p "$DOC_STAGE"
-for f in README.md INSTALL.md CONTRIBUTING.md RELEASE.md; do
+for f in README.md INSTALL.md CONTRIBUTING.md; do
 	if [ -f "$BEAR_DIR/$f" ]; then
 		install -m 0644 "$BEAR_DIR/$f" "$DOC_STAGE/$f"
 	fi

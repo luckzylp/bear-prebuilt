@@ -9,7 +9,7 @@
 #
 # The `bear` user-facing command is a generated shell script that execs
 # bear-driver by absolute path. See Bear/INSTALL.md and
-# bear/src/installation.rs.
+# crates/intercept-supervisor/src/installation.rs.
 #
 # Layout (per Bear/INSTALL.md and Bear/scripts/install.sh)
 # --------------------------------------------------------
@@ -208,13 +208,12 @@ fi
 
 # --- documentation -----------------------------------------------------------
 # Per Bear/INSTALL.md: $PREFIX/share/doc/bear/{README.md, COPYING}.
-# We also bundle the upstream INSTALL.md, CONTRIBUTING.md,
-# CODE_OF_CONDUCT.md, and RELEASE.md (release notes / changelog) so
+# We also bundle the upstream INSTALL.md and CONTRIBUTING.md so
 # users have a single place to find everything. For Debian policy
 # compliance, the license file is also installed as `copyright` (the
 # canonical Debian name), in addition to keeping the upstream
 # `COPYING` name.
-for f in README.md INSTALL.md CONTRIBUTING.md RELEASE.md; do
+for f in README.md INSTALL.md CONTRIBUTING.md; do
 	if [ -f "$BEAR_DIR/$f" ]; then
 		install -m 0644 "$BEAR_DIR/$f" "$DOC_DIR/$f"
 	fi

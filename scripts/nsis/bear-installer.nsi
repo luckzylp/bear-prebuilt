@@ -1,8 +1,9 @@
 ; ==========================================
 ; Bear Installer (x64 / ARM64 compatible)
-; Aligned with Bear v3+ Windows layout (bear/INSTALL.md and
-; bear/src/installation.rs): only bear-driver.exe and bear-wrapper.exe
-; are produced. The `bear` user command is a generated .cmd shim.
+; Aligned with Bear v3+ Windows layout (INSTALL.md and
+; crates/intercept-supervisor/src/installation.rs): only bear-driver.exe
+; and bear-wrapper.exe are produced. The `bear` user command is a
+; generated .cmd shim.
 ; ==========================================
 
 Unicode true

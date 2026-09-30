@@ -1,24 +1,27 @@
-# Bear v4+ Multi-Platform Deployment
+# Bear Multi-Platform Prebuilt
 
-This repository contains scripts and GitHub Actions workflows to build platform-specific installers for Bear (compilation database generation tool) with custom installation paths.
+This repository contains scripts and a GitHub Actions workflow that build
+platform-specific installers for [Bear](https://github.com/rizsotto/Bear)
+(compilation database generation tool) from upstream source.
 
-## 🎯 Overview
+## Overview
 
-Automated build system for Bear with platform-specific configurations, aligned
+Automated build system for Bear with platform-specific packaging, aligned
 with the installation layout described in Bear's upstream
 [`INSTALL.md`](https://github.com/rizsotto/Bear/blob/main/INSTALL.md).
 
-- **Windows**: NSIS installer with fixed installation path
+- **Windows**: NSIS installer (`bear-driver.exe`, `bear-wrapper.exe`, `bear.cmd` shim)
 - **Linux**: Debian packages for amd64 (with multilib), arm64, armhf, and i386
-- **macOS**: Native .pkg installer (wrapper mode)
+- **macOS**: DMG installer (wrapper mode, `Bear.app` with `install.sh`)
 
-Bear v3+ is implemented in Rust and configures its runtime wrapper/preload
-lookup directory at **build time** through the `INTERCEPT_LIBDIR` env var — see
-`bear/build.rs`. The `patch-build-rs-*.sh` scripts in this repo predated that
-rewrite and are no longer invoked by CI; runtime paths are baked in via
-`INTERCEPT_LIBDIR=$LIB` on glibc Linux and `INTERCEPT_LIBDIR=lib` elsewhere.
+Bear v3+ is implemented in Rust. Runtime wrapper/preload lookup paths are
+configured at **build time** through the `INTERCEPT_LIBDIR` env var (see
+`crates/intercept-supervisor/build.rs` and
+`crates/intercept-supervisor/src/installation.rs` in the Bear source). CI
+sets `INTERCEPT_LIBDIR` to concrete Debian multiarch subpaths on glibc
+Linux and `lib` elsewhere.
 
-## 🚀 Build Process
+## Build Process
 
 ### Supported Build Targets
 
@@ -36,38 +39,41 @@ rewrite and are no longer invoked by CI; runtime paths are baked in via
 - `x86_64-pc-windows-msvc`
 - `aarch64-pc-windows-msvc`
 
-**macOS (2 targets - wrapper mode)**:
-- `x86_64-apple-darwin` → `bear-<version>-x86_64-apple-darwin-wrapper.dmg`
-- `aarch64-apple-darwin` → `bear-<version>-aarch64-apple-darwin-wrapper.dmg`
+**macOS (2 targets, wrapper mode)**:
+- `x86_64-apple-darwin`
+- `aarch64-apple-darwin`
 
-**Default `INTERCEPT_LIBDIR` per target** (matches Bear's `INSTALL.md`):
+**`INTERCEPT_LIBDIR` per target** (matches Bear's `INSTALL.md`):
 - x86_64 Linux: `lib/x86_64-linux-gnu`
 - aarch64 Linux: `lib/aarch64-linux-gnu`
 - armv7 Linux: `lib/arm-linux-gnueabihf`
 - i686 Linux: `lib/i386-linux-gnu`
 - macOS / Windows: `lib`
 
-## 📋 Manual Build Instructions
+## Manual Build Instructions
 
 ### Prerequisites
 
 **All Platforms**:
-- Rust toolchain (via rustup)
+- Rust toolchain (1.85+, via rustup)
 - Git
 
 **Platform-Specific**:
 - **Windows**: NSIS (Nullsoft Scriptable Install System)
 - **Linux**: dpkg-dev, fakeroot
-- **macOS**: pkgbuild (built-in)
-- **Cross-compilation**: Zig 0.15.2, cargo-zigbuild
+- **macOS**: hdiutil (built-in)
+- **Cross-compilation**: Zig 0.15.2, cargo-zigbuild (`cargo install cargo-zigbuild --locked`)
 
 ### Build Steps
 
-1. **Clone the repository**:
+1. **Clone both repositories**:
 ```bash
-git clone <this-repo>
+git clone <this-repo> bear-prebuilt
 cd bear-prebuilt
-git submodule update --init --recursive
+git clone https://github.com/rizsotto/Bear.git Bear
+cd Bear
+git checkout <version-tag>   # e.g. 4.2.2
+cd ..
 ```
 
 2. **Build Bear** (set `INTERCEPT_LIBDIR` per target, as described in
@@ -75,17 +81,19 @@ git submodule update --init --recursive
 ```bash
 cd Bear
 
-# glibc Linux — defer the library directory to the dynamic linker
-INTERCEPT_LIBDIR='$LIB' cargo zigbuild --release --target <target-triple>
+# glibc Linux — concrete multiarch subpath
+INTERCEPT_LIBDIR=lib/x86_64-linux-gnu cargo zigbuild --release --target x86_64-unknown-linux-gnu
 
-# macOS / Windows / non-glibc — concrete directory
-INTERCEPT_LIBDIR=lib cargo zigbuild --release --target <target-triple>   # macOS
-cargo build --release --target <target-triple>                            # Windows (MSVC)
+# macOS — concrete directory
+INTERCEPT_LIBDIR=lib cargo zigbuild --release --target x86_64-apple-darwin
+
+# Windows (MSVC, no Zig needed)
+cargo build --release --target x86_64-pc-windows-msvc
 ```
 
 3. **(Optional) Generate shell completions** (Bear's `INSTALL.md` step 3):
 ```bash
-target/release/generate-completions target/<target-triple>/release/completions
+target/<target-triple>/release/generate-completions target/<target-triple>/release/completions
 ```
 
 4. **Create installer**:
@@ -93,26 +101,23 @@ target/release/generate-completions target/<target-triple>/release/completions
 cd ..
 
 # Windows
-pwsh scripts/create-windows-installer.ps1 -Version "4.0.2" -TargetTriple "x86_64-pc-windows-msvc"
+pwsh scripts/create-windows-installer.ps1 -Version "4.2.2" -TargetTriple "x86_64-pc-windows-msvc"
 
 # Linux (Debian)
-bash scripts/create-deb-package.sh "4.1.4" "x86_64-unknown-linux-gnu"
+bash scripts/create-deb-package.sh "4.2.2" "x86_64-unknown-linux-gnu"
 
 # macOS (wrapper mode)
-bash scripts/create-macos-dmg.sh "4.0.2" "x86_64-apple-darwin"
+bash scripts/create-macos-dmg.sh "4.2.2" "x86_64-apple-darwin"
 ```
 
-5. **Find installers** in `dist/` directory:
-- Windows: `dist/x86_64-pc-windows-msvc-installer.exe`
-- Linux: `dist/x86_64-unknown-linux-gnu.deb`
-- macOS: `dist/bear-4.0.2-x86_64-apple-darwin-wrapper.dmg`
+5. **Find installers** in `dist/` directory.
 
-## 📦 Installation
+## Installation
 
 ### Windows
 ```cmd
 # Run installer (requires administrator)
-bear-<version>-windows-installer.exe
+bear-<version>-<triple>-installer.exe
 
 # Verify installation
 bear --version
@@ -121,7 +126,7 @@ bear --version
 ### Linux (Debian/Ubuntu)
 ```bash
 # Install package
-sudo dpkg -i bear_<version>_amd64.deb
+sudo dpkg -i bear_<version>_<arch>-<variant>.deb
 
 # Fix dependencies if needed
 sudo apt-get install -f
@@ -136,7 +141,7 @@ sudo dpkg -r bear
 ### macOS
 ```bash
 # Mount the DMG
-open bear-<version>-x86_64-apple-darwin-wrapper.dmg
+open bear-<version>-<triple>-wrapper.dmg
 
 # Run the installer (from mounted volume)
 sudo "/Volumes/Bear <version>/Bear.app/Contents/MacOS/install.sh"
@@ -147,25 +152,22 @@ sudo "/Volumes/Bear <version>/Bear.app/Contents/MacOS/install.sh"
 bear --version
 
 # Uninstall (manual)
-sudo rm -rf /usr/lib/libexec/bear
+sudo rm -rf /usr/libexec/bear
 sudo rm /usr/local/bin/bear
 ```
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```
 bear-prebuilt/
 ├── .github/
 │   └── workflows/
 │       └── bear-build.yml            # Main CI/CD workflow
-├── Bear/                             # Bear submodule
+├── Bear/                             # Bear source (checked out by CI, not a submodule)
 ├── scripts/
-│   ├── patch-build-rs-windows.sh     # Legacy: no-op since Bear v3 (Rust rewrite)
-│   ├── patch-build-rs-linux.sh       # Legacy: no-op since Bear v3 (Rust rewrite)
-│   ├── patch-build-rs-macos.sh       # Legacy: no-op since Bear v3 (Rust rewrite)
 │   ├── create-windows-installer.ps1  # Windows NSIS installer builder
-│   ├── create-deb-package.sh         # Debian package builder (PREFIX=/usr, INTERCEPT_LIBDIR=lib/<multiarch>)
-│   ├── create-macos-dmg.sh           # macOS .dmg builder (wrapper mode)
+│   ├── create-deb-package.sh         # Debian package builder
+│   ├── create-macos-dmg.sh           # macOS DMG builder (wrapper mode)
 │   ├── nsis/
 │   │   └── bear-installer.nsi        # NSIS installer script
 │   └── debian/
@@ -177,20 +179,18 @@ bear-prebuilt/
 └── README.md                         # This file
 ```
 
-> The `patch-build-rs-*.sh` scripts are kept for historical reference. The
-> upstream `Bear/bear/build.rs` no longer contains `DEFAULT_WRAPPER_PATH` or
-> `DEFAULT_PRELOAD_PATH` constants — runtime lookup is configured through the
-> `INTERCEPT_LIBDIR` env var at build time. CI sets this variable instead of
-> running the patches.
+> Bear is **not** a git submodule. CI checks out the upstream Bear
+> repository at the latest release tag. For local builds, clone Bear
+> into the `Bear/` directory manually.
 
-## 🔍 Key Features
+## Key Features
 
-### ✅ Windows
+### Windows
 - Fixed installation directory (`C:\Program Files\Bear\`)
 - Professional NSIS installer with uninstaller
 - Registered in Windows Add/Remove Programs
 
-### ✅ Linux
+### Linux
 - Layout follows `Bear/INSTALL.md` with the **Debian multiarch
   `INTERCEPT_LIBDIR`** baked in at compile time. Each architecture's
   `bear-driver` resolves `../$INTERCEPT_LIBDIR/libexec.so` to the
@@ -210,60 +210,56 @@ bear-prebuilt/
 - Per-target .deb files for glibc high and glibc 2.17 across
   amd64, arm64, armhf, and i386
 
-### ✅ macOS (Wrapper Mode)
-- Native .dmg disk image format
+### macOS (Wrapper Mode)
+- DMG disk image format
 - Package name includes `-wrapper` identifier
 - Interactive installation via Bear.app
 - Automatic symbolic link creation in `/usr/local/bin/`
 - Compatible with both Intel and Apple Silicon
 
-### ✅ CI/CD Automation
+### CI/CD Automation
 - Manual trigger (`workflow_dispatch`) on the latest upstream Bear release tag
 - Parallel builds for all 12 platform targets (8 Linux + 2 Windows + 2 macOS)
 - Automatic GitHub Release creation
 - Comprehensive build artifacts including shell completions
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Windows
-**Issue**: Installation fails with permission error  
+**Issue**: Installation fails with permission error
 **Solution**: Run installer as Administrator
 
 ### Linux
-**Issue**: Missing dependencies  
+**Issue**: Missing dependencies
 **Solution**: Run `sudo apt-get install -f` to fix dependencies
 
-**Issue**: `bear` not found after install  
+**Issue**: `bear` not found after install
 **Solution**: `/usr/bin/bear` is a generated shell script that execs
 `/usr/libexec/bear/bin/bear-driver`. Make sure both files are present
 and executable (`dpkg -L bear | grep bear`).
 
 ### macOS
-**Issue**: "bear" cannot be opened because the developer cannot be verified  
+**Issue**: "bear" cannot be opened because the developer cannot be verified
 **Solution**: System Preferences → Security & Privacy → Allow Bear.app, or right-click → Open
 
-**Issue**: Installation script fails  
+**Issue**: Installation script fails
 **Solution**: Ensure you run with sudo: `sudo /Volumes/Bear\ <version>/Bear.app/Contents/MacOS/install.sh`
 
-**Issue**: Wrapper not found  
-**Solution**: Verify `/usr/lib/libexec/bear/bear-wrapper` exists and is executable
+**Issue**: Wrapper not found
+**Solution**: Verify `/usr/libexec/bear/bin/bear-wrapper` exists and is executable
 
-## 📄 License
+## License
 
 Bear is licensed under GPLv3. See the Bear repository for full license information.
 
-## 🔗 Links
+## Links
 
 - **Bear Official Repository**: https://github.com/rizsotto/Bear
 - **Build Releases**: Check GitHub Releases for prebuilt installers
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please ensure:
-1. Platform-specific patches are tested locally
-2. CI/CD workflow changes don't break existing builds
+1. CI/CD workflow changes don't break existing builds
+2. Multilib (amd64) deb packaging remains functional
 3. Documentation is updated for any new features
-
----
-
-**Note**: macOS builds use wrapper mode by default and are packaged as DMG disk images with the `-wrapper` suffix in filenames.

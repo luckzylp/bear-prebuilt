@@ -89,7 +89,7 @@ jobs:
 
       - name: Install cargo-zigbuild
         if: "!contains(matrix.target, 'windows')"
-        run: cargo install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
 
       - name: Add Rust target (Linux/macOS)
         if: "!contains(matrix.target, 'windows')"
@@ -109,9 +109,9 @@ jobs:
 
       # Bear v3+ (Rust) configures the runtime preload-library lookup
       # directory through the INTERCEPT_LIBDIR env var at build time
-      # (see bear/build.rs and bear/src/installation.rs). The
-      # `patch-build-rs-*.sh` scripts in this repo predate the Rust
-      # rewrite and are no-ops; runtime paths are now compiled in.
+      # (see crates/intercept-supervisor/build.rs and
+      # crates/intercept-supervisor/src/installation.rs). Runtime paths
+      # are compiled in via cargo:rustc-env.
       #
       # Note: we deliberately do NOT use the `$LIB` token from Bear's
       # INSTALL.md. bear-driver resolves `INTERCEPT_LIBDIR` with a
@@ -128,8 +128,8 @@ jobs:
           # Set INTERCEPT_LIBDIR to the Debian multiarch subpath so
           # that bear-driver resolves `../$INTERCEPT_LIBDIR/libexec.so`
           # to the multiarch location at runtime. See Bear/INSTALL.md
-          # and bear/src/installation.rs. This must match the path the
-          # deb packager installs the .so to.
+          # and crates/intercept-supervisor/src/installation.rs. This
+          # must match the path the deb packager installs the .so to.
           TARGET="${{ matrix.target }}"
           TARGET="${TARGET%.2.17}"
           case "$TARGET" in
@@ -146,9 +146,10 @@ jobs:
 
       # Multilib: when this is an x86_64 (or x86_64 .2.17) build, also
       # produce a 32-bit i686 set of artifacts into target/i686-.../release/
-      # so the deb packager can fold them in under /usr/lib32/bear/. The
-      # i686 bear-driver is compiled with INTERCEPT_LIBDIR pointing at
-      # the i386 multiarch libdir, matching /usr/lib32/bear/lib/...
+      # so the deb packager can fold them in under
+      # /usr/libexec/bear/lib/i386-linux-gnu/. The i686 bear-driver is
+      # compiled with INTERCEPT_LIBDIR pointing at the i386 multiarch
+      # libdir, matching /usr/libexec/bear/lib/i386-linux-gnu/.
       - name: Build Bear i686 (multilib)
         if: >-
           (matrix.target == 'x86_64-unknown-linux-gnu' ||
@@ -239,7 +240,8 @@ jobs:
               to `bear-driver`.
 
             The runtime lookup directory is compiled in at build time
-            via the `INTERCEPT_LIBDIR=lib` env var.
+            via the `INTERCEPT_LIBDIR` env var (concrete multiarch
+            subpaths on glibc Linux, `lib` elsewhere).
 
             ## Features
             * Built with cargo + zigbuild
