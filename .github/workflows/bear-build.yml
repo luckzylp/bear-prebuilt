@@ -87,11 +87,11 @@ jobs:
           # and a copy fallback to the atomic writer.
           # Remove this step once the fix is merged upstream.
           #
-          # Strip CRLF from the target file first: actions/checkout may
-          # convert LF to CRLF on Windows runners, causing git apply
-          # context-line mismatches.
+          # Strip CRLF from both the target file and the patch: on Windows
+          # runners, actions/checkout converts LF to CRLF for both, which
+          # causes git apply context-line mismatches.
           sed -i 's/\r$//' crates/bear/src/output/writers/atomic.rs
-          git apply ../scripts/patch-atomic-write-windows.patch
+          sed 's/\r$//' ../scripts/patch-atomic-write-windows.patch | git apply --whitespace=fix -
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

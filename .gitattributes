@@ -12,3 +12,7 @@
 # GitHub Actions workflows use LF
 .github/**/*.yml text eol=lf
 .github/**/*.yaml text eol=lf
+
+# Patch files must use LF (git apply context-line matching is
+# sensitive to line endings; CRLF causes failures on Windows runners).
+*.patch text eol=lf
