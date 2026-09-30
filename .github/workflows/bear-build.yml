@@ -86,6 +86,11 @@ jobs:
           # leaving only a .tmp file. This patch adds retry-with-backoff
           # and a copy fallback to the atomic writer.
           # Remove this step once the fix is merged upstream.
+          #
+          # Strip CRLF from the target file first: actions/checkout may
+          # convert LF to CRLF on Windows runners, causing git apply
+          # context-line mismatches.
+          sed -i 's/\r$//' crates/bear/src/output/writers/atomic.rs
           git apply ../scripts/patch-atomic-write-windows.patch
 
       - name: Install Rust
