@@ -303,10 +303,13 @@ if command -v hdiutil >/dev/null 2>&1; then
 	hdiutil create -volname "Bear $VERSION" -srcfolder "$DMG_STAGING" -ov -format UDRW "$DMG_TEMP"
 
 	MOUNT_DIR="/Volumes/Bear $VERSION"
-	hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR" -nobrowse -quiet
-
-	if command -v osascript >/dev/null 2>&1; then
-		osascript <<APPLESCRIPT_EOF
+	# hdiutil attach can fail on CI runners due to volume-name conflicts,
+	# stale mounts, or permission issues. The attach step is only needed
+	# for the cosmetic Finder layout below; if it fails, skip straight to
+	# the final UDZO conversion.
+	if hdiutil attach "$DMG_TEMP" -mountpoint "$MOUNT_DIR" -nobrowse -quiet; then
+		if command -v osascript >/dev/null 2>&1; then
+			osascript <<APPLESCRIPT_EOF
 tell application "Finder"
     tell disk "Bear $VERSION"
         open
@@ -326,9 +329,13 @@ tell application "Finder"
     end tell
 end tell
 APPLESCRIPT_EOF
+		fi
+
+		hdiutil detach "$MOUNT_DIR" -force -quiet
+	else
+		echo "Warning: hdiutil attach failed; skipping Finder layout (cosmetic only)"
 	fi
 
-	hdiutil detach "$MOUNT_DIR" -force -quiet
 	hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_FILE"
 	rm -f "$DMG_TEMP"
 else
